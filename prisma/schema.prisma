@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  role                UserRole             @default(PATIENT)
+  phone               String?
+  dateOfBirth         DateTime?
+  specialty           String?              // For doctors
+  medicalLicenseNumber String?             // For doctors
+  isActive            Boolean              @default(true)
+  emailVerified       Boolean              @default(false)
+  verificationStatus  VerificationStatus   @default(PENDING_VERIFICATION)
+  mfaEnabled          Boolean              @default(false)
+  mfaSecret           String?
+  lastLogin           DateTime?
+  failedLoginAttempts Int                  @default(0)
+  lockedUntil         DateTime?
+  passwordHistory     Json                 @default("[]")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  createdBy           String?
+  updatedBy           String?
+  appointments        Appointment[]
+  auditLogs           AuditLog[]
+  consentRecords      ConsentRecord[]
+  consultations       Consultation[]
+  medicalRecords      MedicalRecord[]
+  assignedPatients    Patient[]            @relation("AssignedProvider")
+  patients            Patient?             @relation("UserPatients")
+  systemSettings      SystemSetting[]
+  userRoles           UserRoleAssignment[]
+  userSessions        UserSession[]
+  passwordResets      PasswordReset[]
+
+  @@map("users")
+}
+
+model Patient {
+  id                             String          @id @default(uuid())
+  userId                         String?         @unique
+  firstName                      String
+  lastName                       String
+  email                          String          @unique
+  dateOfBirth                    DateTime
+  gender                         Gender
+  phoneEncrypted                 Bytes?
+  addressStreetEncrypted         Bytes?
+  addressCityEncrypted           Bytes?
+  addressStateEncrypted          Bytes?
+  addressZipEncrypted            Bytes?
+  addressCountryEncrypted        Bytes?
+  emergencyNameEncrypted         Bytes?
+  emergencyRelationshipEncrypted Bytes?
+  emergencyPhoneEncrypted        Bytes?
+  bloodType                      BloodType?
+  allergies                      Json            @default("[]")
+  chronicConditions              Json            @default("[]")
+  currentMedications             Json            @default("[]")
+  assignedProviderId             String?
+  status                         PatientStatus   @default(ACTIVE)
+  gdprConsent                    Boolean         @default(false)
+  gdprConsentDate                DateTime?
+  gdprConsentVersion             String?
+  createdAt                      DateTime        @default(now())
+  updatedAt                      DateTime        @updatedAt
+  createdBy                      String?
+  updatedBy                      String?
+  appointments                   Appointment[]
+  consultations                  Consultation[]
+  medicalRecords                 MedicalRecord[]
+  assignedProvider               User?           @relation("AssignedProvider", fields: [assignedProviderId], references: [id])
+  user                           User?           @relation("UserPatients", fields: [userId], references: [id])
+
+  @@map("patients")
+}
+
+model MedicalRecord {
+  id                       String     @id @default(uuid())
+  patientId                String
+  providerId               String
+  type                     RecordType
+  title                    String
+  recordDate               DateTime
+  descriptionEncrypted     Bytes?
+  findingsEncrypted        Bytes?
+  recommendationsEncrypted Bytes?
+  attachments              Json       @default("[]")
+  isPrivate                Boolean    @default(false)
+  restrictedAccess         Boolean    @default(false)
+  accessRestrictions       Json?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  createdBy                String?
+  updatedBy                String?
+  patient                  Patient    @relation(fields: [patientId], references: [id])
+  provider                 User       @relation(fields: [providerId], references: [id])
+
+  @@map("medical_records")
+}
+
+model Appointment {
+  id                String            @id @default(uuid())
+  patientId         String
+  providerId        String
+  startTime         DateTime
+  endTime           DateTime
+  timezone          String            @default("UTC")
+  type              AppointmentType
+  status            AppointmentStatus @default(SCHEDULED)
+  reason            String?
+  priority          PriorityLevel     @default(NORMAL)
+  notesEncrypted    Bytes?
+  reminderSent      Boolean           @default(false)
+  confirmationSent  Boolean           @default(false)
+  locationType      LocationType      @default(IN_PERSON)
+  roomNumber        String?
+  virtualMeetingUrl String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  patient           Patient           @relation(fields: [patientId], references: [id])
+  provider          User              @relation(fields: [providerId], references: [id])
+  consultations     Consultation[]
+
+  @@map("appointments")
+}
+
+model Consultation {
+  id                            String           @id @default(uuid())
+  appointmentId                 String?
+  patientId                     String
+  providerId                    String
+  type                          ConsultationType
+  startTime                     DateTime
+  endTime                       DateTime?
+  durationMinutes               Int?
+  chiefComplaintEncrypted       Bytes?
+  symptomsEncrypted             Bytes?
+  diagnosisEncrypted            Bytes?
+  treatmentPlanEncrypted        Bytes?
+  vitalSigns                    Json?
+  prescriptions                 Json             @default("[]")
+  followUpRequired              Boolean          @default(false)
+  followUpDate                  DateTime?
+  followUpInstructionsEncrypted Bytes?
+  billingCodes                  Json             @default("[]")
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
+  createdBy                     String?
+  updatedBy                     String?
+  appointment                   Appointment?     @relation(fields: [appointmentId], references: [id])
+  patient                       Patient          @relation(fields: [patientId], references: [id])
+  provider                      User             @relation(fields: [providerId], references: [id])
+
+  @@map("consultations")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  userEmail    String?
+  userRole     String?
+  action       String
+  resource     String
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  sessionId    String?
+  requestId    String?
+  changes      Json?
+  oldValues    Json?
+  newValues    Json?
+  success      Boolean
+  errorMessage String?
+  timestamp    DateTime @default(now())
+  metadata     Json?
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model ConsentRecord {
+  id             String      @id @default(uuid())
+  userId         String
+  consentType    ConsentType
+  purpose        String
+  granted        Boolean
+  consentText    String
+  consentVersion String
+  legalBasis     LegalBasis
+  ipAddress      String?
+  userAgent      String?
+  grantedAt      DateTime?
+  withdrawnAt    DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  user           User        @relation(fields: [userId], references: [id])
+
+  @@map("consent_records")
+}
+
+model UserSession {
+  id               String    @id @default(uuid())
+  userId           String
+  sessionToken     String    @unique
+  refreshToken     String    @unique
+  deviceInfo       Json?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  lastAccessed     DateTime  @default(now())
+  expiresAt        DateTime
+  isActive         Boolean   @default(true)
+  revokedAt        DateTime?
+  revocationReason String?
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@map("user_sessions")
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("password_resets")
+}
+
+model Role {
+  id           String               @id @default(uuid())
+  name         String               @unique
+  description  String?
+  permissions  Json                 @default("[]")
+  isSystemRole Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  userRoles    UserRoleAssignment[]
+
+  @@map("roles")
+}
+
+model UserRoleAssignment {
+  id        String    @id @default(uuid())
+  userId    String
+  roleId    String
+  grantedBy String?
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+  role      Role      @relation(fields: [roleId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model SystemSetting {
+  id            String   @id @default(uuid())
+  key           String   @unique
+  value         Json
+  description   String?
+  isSensitive   Boolean  @default(false)
+  updatedBy     String?
+  updatedAt     DateTime @updatedAt
+  updatedByUser User?    @relation(fields: [updatedBy], references: [id])
+
+  @@map("system_settings")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  DOCTOR
+  NURSE
+  PATIENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BloodType {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum RecordType {
+  CONSULTATION
+  LAB_RESULT
+  PRESCRIPTION
+  DIAGNOSIS
+  IMAGING
+  PROCEDURE
+}
+
+enum AppointmentType {
+  CONSULTATION
+  FOLLOW_UP
+  EMERGENCY
+  ROUTINE_CHECK
+  SURGERY
+  THERAPY
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PriorityLevel {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum LocationType {
+  IN_PERSON
+  TELEMEDICINE
+  PHONE
+}
+
+enum ConsultationType {
+  INITIAL
+  FOLLOW_UP
+  EMERGENCY
+  SPECIALIST
+}
+
+enum ConsentType {
+  DATA_PROCESSING
+  MEDICAL_TREATMENT
+  MARKETING
+  RESEARCH
+  DATA_SHARING
+}
+
+enum LegalBasis {
+  CONSENT
+  CONTRACT
+  LEGAL_OBLIGATION
+  VITAL_INTERESTS
+  PUBLIC_TASK
+  LEGITIMATE_INTERESTS
+}
+
+enum VerificationStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+
