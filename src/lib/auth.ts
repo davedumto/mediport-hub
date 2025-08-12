@@ -104,7 +104,7 @@ export function verifyMFACode(secret: string, code: string): boolean {
     secret,
     encoding: "base32",
     token: code,
-    window: 2, // Allow 2 time steps tolerance
+    window: 10, // Allow 10 time steps tolerance (5 minutes: 10 × 30s = 300s)
   });
 }
 
