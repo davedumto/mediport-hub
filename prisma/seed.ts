@@ -3,7 +3,7 @@ import { PrismaClient, Gender, BloodType } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting database seeding...");
+  console.log("Starting database seeding...");
 
   // Create system roles
   const roles = [
@@ -63,7 +63,7 @@ async function main() {
       update: {},
       create: roleData,
     });
-    console.log(`✅ Role ${role.name} created/updated`);
+    console.log(`Role ${role.name} created/updated`);
   }
 
   // Create super admin user
@@ -86,7 +86,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Super admin created");
+  console.log("Super admin created");
 
   // Assign super admin role
   await prisma.userRoleAssignment.upsert({
@@ -108,7 +108,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Super admin role assigned");
+  console.log("Super admin role assigned");
 
   // Create sample doctor
   const doctor = await prisma.user.upsert({
@@ -132,7 +132,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Sample doctor created");
+  console.log("Sample doctor created");
 
   // Assign doctor role
   const doctorRole = await prisma.role.findUnique({
@@ -153,7 +153,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Sample doctor role assigned");
+  console.log("Sample doctor role assigned");
 
   // Create sample patients with explicit typing
   const patients: Array<{
@@ -208,7 +208,7 @@ async function main() {
         createdBy: superAdmin.id,
       },
     });
-    console.log(`✅ Patient ${patient.firstName} ${patient.lastName} created`);
+    console.log(`Patient ${patient.firstName} ${patient.lastName} created`);
   }
 
   // Create sample medical records
@@ -226,7 +226,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Sample medical record created");
+  console.log("Sample medical record created");
 
   // Create sample appointment
   await prisma.appointment.create({
@@ -247,7 +247,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Sample appointment created");
+  console.log("Sample appointment created");
 
   // Create sample consent record
   await prisma.consentRecord.create({
@@ -264,10 +264,10 @@ async function main() {
     },
   });
 
-  console.log("✅ Sample consent record created");
+  console.log("Sample consent record created");
 
-  console.log("🎉 Database seeding completed successfully!");
-  console.log("\n📋 Sample Data Created:");
+  console.log("Database seeding completed successfully!");
+  console.log("\nSample Data Created:");
   console.log("- 1 Super Admin (admin@edith.com / admin123)");
   console.log("- 1 Doctor (dr.smith@edith.com / doctor123)");
   console.log("- 2 Patients");
@@ -279,7 +279,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error("❌ Error seeding database:", e);
+    console.error("Error seeding database:", e);
     process.exit(1);
   })
   .finally(async () => {

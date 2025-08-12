@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GDPR_CONSENT_TEMPLATES } from "../../../../utils/constants";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
       templates: GDPR_CONSENT_TEMPLATES,
     });
   } catch (error) {
-    console.error("Consent templates error:", error);
+    logger.error("Consent templates error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

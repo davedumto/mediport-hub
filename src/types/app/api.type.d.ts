@@ -21,6 +21,13 @@ interface AuthResponse {
     mfaSetupRequired?: boolean;
     mfaSecret?: string;
     qrCodeUrl?: string;
+    patient?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      status: string;
+    };
   };
   message?: string;
 }
@@ -33,13 +40,10 @@ interface LoginRequest {
 }
 
 interface RegisterRequest {
+  fullName: string;
   email: string;
   password: string;
-  firstName?: string;
-  lastName?: string;
-  role?: Role;
-  phone?: string;
-  dateOfBirth?: string;
+  gdprConsent: boolean;
 }
 
 interface RefreshResponse {

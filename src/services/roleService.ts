@@ -3,6 +3,7 @@ import { Role, Permission, RoleStatistics } from "../types/auth";
 import { AppError, ErrorCodes } from "../utils/errors";
 import { AuditService, AuditAction } from "../lib/audit";
 import { ROLE_PERMISSIONS } from "../lib/permissions";
+import { logger } from "../utils/logger";
 
 export class RoleService {
   // Assign role to user
@@ -363,8 +364,7 @@ export class RoleService {
           requestInfo
         );
       } catch (error) {
-        // Log the error but continue with other assignments
-        console.error(
+        logger.error(
           `Failed to assign role ${assignment.roleName} to user ${assignment.userId}:`,
           error
         );
@@ -374,27 +374,36 @@ export class RoleService {
 
   // Get role statistics
   static async getRoleStatistics(): Promise<RoleStatistics[]> {
-    const roleStats = await prisma.role.findMany({
-      include: {
-        _count: {
-          select: {
-            userRoles: {
-              where: {
-                revokedAt: null,
+    try {
+      const roleStats = await prisma.role.findMany({
+        include: {
+          _count: {
+            select: {
+              userRoles: {
+                where: {
+                  revokedAt: null,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    return roleStats.map((role) => ({
-      name: role.name,
-      description: role.description,
-      isSystemRole: role.isSystemRole,
-      userCount: role._count.userRoles,
-      permissions: role.permissions,
-    }));
+      return roleStats.map((role) => ({
+        name: role.name,
+        description: role.description,
+        isSystemRole: role.isSystemRole,
+        userCount: role._count.userRoles,
+        permissions: role.permissions,
+      }));
+    } catch (error) {
+      logger.error("Failed to get role statistics:", error);
+      throw new AppError(
+        ErrorCodes.INTERNAL_SERVER_ERROR,
+        "Failed to retrieve role statistics",
+        500
+      );
+    }
   }
 
   // Validate role permissions

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import logger from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Logout error:", error);
+    logger.error("Logout error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

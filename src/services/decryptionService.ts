@@ -1,4 +1,5 @@
 import { Buffer } from "buffer";
+import logger from "../utils/logger";
 
 export interface EncryptedData {
   encrypted: string;
@@ -99,7 +100,7 @@ export class DecryptionService {
 
       return new TextDecoder().decode(decrypted);
     } catch (error) {
-      console.error("Decryption failed:", error);
+      logger.error("Decryption failed:", error);
       throw new Error("Failed to decrypt PII data");
     }
   }

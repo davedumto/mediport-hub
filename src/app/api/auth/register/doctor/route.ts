@@ -174,9 +174,22 @@ export async function POST(request: NextRequest) {
     // Return success response matching the API specification
     return NextResponse.json(
       {
+        success: true,
         message:
           "Doctor registration successful. Your account is now pending verification.",
-        userId: user.id,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            specialty,
+            medicalLicenseNumber,
+            verificationStatus: user.verificationStatus,
+          },
+          userId: user.id,
+        },
       },
       { status: 200 }
     );
