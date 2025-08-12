@@ -54,7 +54,7 @@ const Input: React.FC<InputProps> = ({
           ${error
                         ? 'border border-red-500'
                         : value
-                            ? 'border border-teal-600'
+                            ? 'border border-gray-400'
                             : 'border-0'
                     }
           ${containerClassName}
