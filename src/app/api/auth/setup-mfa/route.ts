@@ -3,6 +3,7 @@ import { generateMFASecret, verifyMFACode } from "../../../../lib/auth";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { logger } from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("MFA setup error:", error);
+    logger.error("MFA setup error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

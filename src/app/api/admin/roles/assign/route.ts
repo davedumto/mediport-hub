@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { RoleService } from "../../../../../services/roleService";
 import { AuditService, AuditAction } from "../../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../../utils/appRouterHelpers";
+import { logger } from "../../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       userRole,
     });
   } catch (error) {
-    console.error("Role assignment error:", error);
+    logger.error("Role assignment error:", error);
 
     if (error instanceof Error) {
       return NextResponse.json(
@@ -109,7 +110,7 @@ export async function DELETE(request: NextRequest) {
       message: "Role revoked successfully",
     });
   } catch (error) {
-    console.error("Role revocation error:", error);
+    logger.error("Role revocation error:", error);
 
     if (error instanceof Error) {
       return NextResponse.json(

@@ -7,21 +7,21 @@ import prisma from "../lib/db";
 
 async function initializeRBAC() {
   try {
-    console.log("🚀 Initializing RBAC System...");
+    console.log("Initializing RBAC System...");
 
     // Initialize system roles
-    console.log("📋 Creating system roles...");
+    console.log("Creating system roles...");
     await initializeSystemRoles();
-    console.log("✅ System roles created successfully");
+    console.log("System roles created successfully");
 
     // Create a super admin user if none exists
-    console.log("👑 Checking for super admin user...");
+    console.log("Checking for super admin user...");
     const superAdminExists = await prisma.user.findFirst({
       where: { role: "SUPER_ADMIN" },
     });
 
     if (!superAdminExists) {
-      console.log("👑 Creating super admin user...");
+      console.log("Creating super admin user...");
       const superAdmin = await prisma.user.create({
         data: {
           email: "superadmin@ehr.local",
@@ -35,25 +35,25 @@ async function initializeRBAC() {
         },
       });
 
-      console.log(`✅ Super admin user created: ${superAdmin.email}`);
-      console.log("🔑 Default password: SuperAdmin123!");
+      console.log(`Super admin user created: ${superAdmin.email}`);
+      console.log("Default password: SuperAdmin123!");
       console.log(
         "⚠️  Please change this password immediately after first login!"
       );
     } else {
-      console.log("✅ Super admin user already exists");
+      console.log("Super admin user already exists");
     }
 
     // Display role statistics
-    console.log("📊 RBAC System Statistics:");
+    console.log("RBAC System Statistics:");
     const stats = await RoleService.getRoleStatistics();
     stats.forEach((role: RoleStatistics) => {
       console.log(`  - ${role.name}: ${role.userCount} users`);
     });
 
-    console.log("\n🎉 RBAC System initialization completed successfully!");
+    console.log("\nRBAC System initialization completed successfully!");
   } catch (error) {
-    console.error("❌ Failed to initialize RBAC system:", error);
+    console.error("Failed to initialize RBAC system:", error);
     process.exit(1);
   } finally {
     await prisma.$disconnect();

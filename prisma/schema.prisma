@@ -8,40 +8,40 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(uuid())
-  email               String               @unique
-  passwordHash        String
-  firstName           String
-  lastName            String
-  role                UserRole             @default(PATIENT)
-  phone               String?
-  dateOfBirth         DateTime?
-  specialty           String?              // For doctors
-  medicalLicenseNumber String?             // For doctors
-  isActive            Boolean              @default(true)
-  emailVerified       Boolean              @default(false)
-  verificationStatus  VerificationStatus   @default(PENDING_VERIFICATION)
-  mfaEnabled          Boolean              @default(false)
-  mfaSecret           String?
-  lastLogin           DateTime?
-  failedLoginAttempts Int                  @default(0)
-  lockedUntil         DateTime?
-  passwordHistory     Json                 @default("[]")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  createdBy           String?
-  updatedBy           String?
-  appointments        Appointment[]
-  auditLogs           AuditLog[]
-  consentRecords      ConsentRecord[]
-  consultations       Consultation[]
-  medicalRecords      MedicalRecord[]
-  assignedPatients    Patient[]            @relation("AssignedProvider")
-  patients            Patient?             @relation("UserPatients")
-  systemSettings      SystemSetting[]
-  userRoles           UserRoleAssignment[]
-  userSessions        UserSession[]
-  passwordResets      PasswordReset[]
+  id                   String               @id @default(uuid())
+  email                String               @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  role                 UserRole             @default(PATIENT)
+  phone                String?
+  dateOfBirth          DateTime?
+  isActive             Boolean              @default(true)
+  emailVerified        Boolean              @default(false)
+  mfaEnabled           Boolean              @default(false)
+  mfaSecret            String?
+  lastLogin            DateTime?
+  failedLoginAttempts  Int                  @default(0)
+  lockedUntil          DateTime?
+  passwordHistory      Json                 @default("[]")
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  verificationStatus   VerificationStatus   @default(PENDING_VERIFICATION)
+  medicalLicenseNumber String?
+  specialty            String?
+  appointments         Appointment[]
+  auditLogs            AuditLog[]
+  consentRecords       ConsentRecord[]
+  consultations        Consultation[]
+  medicalRecords       MedicalRecord[]
+  passwordResets       PasswordReset[]
+  assignedPatients     Patient[]            @relation("AssignedProvider")
+  patients             Patient?             @relation("UserPatients")
+  systemSettings       SystemSetting[]
+  userRoles            UserRoleAssignment[]
+  userSessions         UserSession[]
 
   @@map("users")
 }
@@ -386,5 +386,3 @@ enum VerificationStatus {
   VERIFIED
   REJECTED
 }
-
-

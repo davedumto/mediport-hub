@@ -113,6 +113,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Create corresponding Patient record
+    const patient = await prisma.patient.create({
+      data: {
+        userId: user.id, // Link to the user record
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        dateOfBirth: new Date(), // Default date, can be updated later
+        gender: "OTHER", // Default gender, can be updated later
+        status: "ACTIVE",
+        gdprConsent: true,
+        gdprConsentDate: new Date(),
+        gdprConsentVersion: "1.0",
+        createdBy: user.id,
+      },
+    });
+
     // Create GDPR consent record
     const consentRecord = await prisma.consentRecord.create({
       data: {
@@ -149,6 +166,8 @@ export async function POST(request: NextRequest) {
         mfaSecretGenerated: true,
         gdprConsent: true,
         consentRecordId: consentRecord.id,
+        patientRecordId: patient.id,
+        patientCreated: true,
       },
       ...requestInfo,
     });
@@ -156,9 +175,27 @@ export async function POST(request: NextRequest) {
     // Return success response matching the API specification
     return NextResponse.json(
       {
+        success: true,
         message:
           "Patient registration successful. Please check your email to verify your account.",
-        userId: user.id,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+          },
+          patient: {
+            id: patient.id,
+            firstName: patient.firstName,
+            lastName: patient.lastName,
+            email: patient.email,
+            status: patient.status,
+          },
+          userId: user.id,
+          patientId: patient.id,
+        },
       },
       { status: 201 }
     );

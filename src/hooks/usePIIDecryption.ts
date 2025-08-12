@@ -6,6 +6,7 @@ import {
   Consultation,
   Appointment,
 } from "../services/decryptionService";
+import { logger } from "../utils/logger";
 
 export function usePIIDecryption<
   T extends Patient | MedicalRecord | Consultation | Appointment | null
@@ -55,7 +56,7 @@ export function usePIIDecryption<
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Decryption failed");
-        console.error("PII decryption error:", err);
+        logger.error("PII decryption error:", err);
       } finally {
         setIsDecrypting(false);
       }

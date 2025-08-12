@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "../../../../lib/db";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { logger } from "../../../../lib/logger";
 
 export async function GET(
   request: NextRequest,
@@ -59,7 +60,7 @@ export async function GET(
 
     return NextResponse.json({ patient });
   } catch (error) {
-    console.error("Get patient error:", error);
+    logger.error("Get patient error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
@@ -116,7 +117,7 @@ export async function PUT(
       patient: updatedPatient,
     });
   } catch (error) {
-    console.error("Update patient error:", error);
+    logger.error("Update patient error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
@@ -171,7 +172,7 @@ export async function DELETE(
       message: "Patient archived successfully",
     });
   } catch (error) {
-    console.error("Delete patient error:", error);
+    logger.error("Delete patient error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
