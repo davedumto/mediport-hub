@@ -328,7 +328,7 @@ Test role-based access control (requires ADMIN or SUPER_ADMIN role).
 ### MFA Security
 
 - TOTP-based (Time-based One-Time Password)
-- 6-digit codes with 2-step tolerance
+- 6-digit codes with 10-step tolerance (5 minutes expiration)
 - QR code generation for easy setup
 - Automatic MFA secret generation
 
