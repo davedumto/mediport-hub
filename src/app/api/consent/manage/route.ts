@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ConsentService } from "../../../../services/consentService";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { logger } from "../../../../lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const consentHistory = await ConsentService.getConsentHistory(userId);
     return NextResponse.json({ consentHistory });
   } catch (error) {
-    console.error("Get consent history error:", error);
+    logger.error("Get consent history error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       message: "Consent withdrawn successfully",
     });
   } catch (error) {
-    console.error("Withdraw consent error:", error);
+    logger.error("Withdraw consent error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
@@ -121,7 +122,7 @@ export async function PUT(request: NextRequest) {
       message: "Consent renewed successfully",
     });
   } catch (error) {
-    console.error("Renew consent error:", error);
+    logger.error("Renew consent error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

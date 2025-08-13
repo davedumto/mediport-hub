@@ -3,6 +3,7 @@ import { generateTokens, verifyRefreshToken } from "../../../../lib/auth";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { logger } from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Token refresh error:", error);
+    logger.error("Token refresh error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

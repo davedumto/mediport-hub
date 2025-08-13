@@ -1,10 +1,7 @@
-import type { Metadata } from "next";
+"use client"
 import "./globals.css";
-
-export const metadata: Metadata = {
-  title: "MediPort Hub",
-  description: "Secure healthcare platform with GDPR compliance",
-};
+import { Provider } from "react-redux";
+import { store } from "@/state-management/store";
 
 export default function RootLayout({
   children,
@@ -13,7 +10,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Provider store={store} >
+          {children}
+        </Provider>
+      </body>
     </html>
   );
 }

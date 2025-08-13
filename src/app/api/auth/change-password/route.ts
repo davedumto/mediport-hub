@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "../../../../lib/auth";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { logger } from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("Change password error:", error);
+    logger.error("Change password error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",

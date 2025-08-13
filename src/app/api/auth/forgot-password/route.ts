@@ -3,6 +3,7 @@ import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import crypto from "crypto";
+import { logger } from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("Forgot password error:", error);
+    logger.error("Forgot password error:", error);
     return NextResponse.json(
       {
         error: "Internal Server Error",
