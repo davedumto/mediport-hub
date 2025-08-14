@@ -9,7 +9,7 @@ const DashboardLayout = ({
     children: React.ReactNode;
 }) => {
 
-    const userRole = "patient" as UserRole;
+    const userRole = "doctor" as UserRole;
     const router = useRouter();
     useLayoutEffect(() => {
         switch (userRole) {
