@@ -1,7 +1,6 @@
 "use client"
 import CalendarSection from "@/components/pages/dashboard/CalendarSection";
 import DashboardStatsSection from "@/components/pages/dashboard/DashboardStats";
-import Header from "@/components/pages/dashboard/Header";
 import { mockAppointments } from "@/components/pages/dashboard/mock/appointment";
 import { buildMonthGrid, endOfMonth, startOfMonth } from "@/utils/calendar";
 import { useMemo, useState } from "react";
@@ -15,24 +14,20 @@ const DoctorDashboard = () => {
     const weeks = useMemo(() => buildMonthGrid(currentMonth), [currentMonth]);
     return (
         <>
-            <div className="w-full min-h-screen bg-gray-100 relative pb-32" >
-                <Header />
+            <div className="w-full min-h-screenrelative pb-32" >
+                <DashboardStatsSection />
+                <section className="mt-6">
+                    <CalendarSection
 
-                <div className="w-full top-26 relative px-4" >
-                    <DashboardStatsSection />
-                    <section className="mt-6">
-                        <CalendarSection
-
-                            appointments={mockAppointments}
-                            isLoading={false}
-                            month={currentMonth}
-                            onPrev={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                            onNext={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                            onToday={() => setCurrentMonth(new Date())}
-                            weeks={weeks}
-                        />
-                    </section>
-                </div>
+                        appointments={mockAppointments}
+                        isLoading={false}
+                        month={currentMonth}
+                        onPrev={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                        onNext={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                        onToday={() => setCurrentMonth(new Date())}
+                        weeks={weeks}
+                    />
+                </section>
             </div>
         </>
     );
