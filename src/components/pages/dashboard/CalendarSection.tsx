@@ -14,9 +14,10 @@ type Props = {
     onPrev: () => void;
     onNext: () => void;
     onToday: () => void;
+    showTitle?: boolean;
 };
 
-const CalendarSection = ({ month, weeks, appointments, isLoading, onPrev, onNext, onToday }: Props) => {
+const CalendarSection = ({ month, weeks, appointments, isLoading, onPrev, onNext, onToday, showTitle = true }: Props) => {
     const [showModal, setShowModal] = useState<boolean>(false);
     const [openScheduleModal, setScheduleModal] = useState<boolean>(false);
     const [modalData, setModalData] = useState<Appointment | null>(null)
@@ -38,9 +39,9 @@ const CalendarSection = ({ month, weeks, appointments, isLoading, onPrev, onNext
             <div className="bg-white rounded-lg shadow p-4">
 
                 <div className="w-full flex items-center justify-between border-b-gray-100 border-b-2 pb-2 mb-3" >
-                    <h3 className="font-semibold text-sm text-blue-500">
+                    {showTitle && <h3 className="font-semibold text-sm text-blue-500">
                         Appointment Calendar
-                    </h3>
+                    </h3>}
 
                     <Button btnTitle="New Appointment" icon={<PlusIcon size={16} color="white" />} className="w-46 h-10 rounded-sm" textClassName="text-xs" onClick={() => {
                         setScheduleModal(true)

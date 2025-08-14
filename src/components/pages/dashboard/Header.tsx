@@ -7,7 +7,7 @@ const Header = () => {
             <div className="w-[95%] mx-auto fixed right-0 left-0 rounded-sm px-4 py-1.5 min-h-12 bg-white shadow-gray-300 shadow-2xl top-3 z-10 " >
                 <div className="w-full h-full flex items-center justify-between " >
                     <div className="w-90" >
-                        <Input containerClassName=" rounded-full h-4 border-gray-400 border" placeholder="Search appointments..." icon={<Search color="grey" size={16} />} />
+                        <Input onChange={() => { }} containerClassName=" rounded-full h-4 border-gray-400 border" placeholder="Search appointments..." icon={<Search color="grey" size={16} />} />
                     </div>
 
                     <div className="w-auto flex items-center justify-between gap-3" >
