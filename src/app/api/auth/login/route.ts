@@ -12,6 +12,7 @@ import logger from "../../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import { getRolePermissions } from "../../../../lib/permissions";
 
+// Ensure this route is properly exported for Vercel
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
