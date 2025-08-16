@@ -7,8 +7,6 @@ const nextConfig: NextConfig = {
   },
   // Disable turbopack completely for better production compatibility
   turbopack: false,
-  // Ensure proper output for Vercel
-  output: 'standalone',
 };
 
 export default nextConfig;
