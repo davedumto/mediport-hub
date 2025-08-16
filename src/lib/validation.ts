@@ -498,6 +498,51 @@ export const createConsultationSchema = z.object({
 
 export const updateConsultationSchema = createConsultationSchema.partial();
 
+// Feedback validation schemas
+export const feedbackTypeSchema = z.enum([
+  "FEATURE_REQUEST",
+  "BUG_REPORT",
+  "IMPROVEMENT",
+  "COMPLAINT",
+  "COMPLIMENT",
+  "GENERAL",
+]);
+
+export const feedbackPrioritySchema = z.enum([
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "URGENT",
+]);
+
+export const feedbackCategorySchema = z.enum([
+  "USER_INTERFACE",
+  "FUNCTIONALITY",
+  "PERFORMANCE",
+  "SECURITY",
+  "ACCESSIBILITY",
+  "DOCUMENTATION",
+  "GENERAL",
+]);
+
+export const feedbackStatusSchema = z.enum([
+  "PENDING",
+  "IN_REVIEW",
+  "IN_PROGRESS",
+  "RESOLVED",
+  "CLOSED",
+]);
+
+export const createFeedbackSchema = z.object({
+  type: feedbackTypeSchema,
+  title: createSecureString(1, 200),
+  description: createSecureString(1, 2000),
+  priority: feedbackPrioritySchema.optional(),
+  category: feedbackCategorySchema.optional(),
+});
+
+export const updateFeedbackSchema = createFeedbackSchema.partial();
+
 // Consent validation schemas
 export const consentTypeSchema = z.enum([
   "DATA_PROCESSING",
@@ -678,6 +723,14 @@ export const validationSchemas = {
     create: createConsultationSchema,
     update: updateConsultationSchema,
     type: consultationTypeSchema,
+  },
+  feedback: {
+    create: createFeedbackSchema,
+    update: updateFeedbackSchema,
+    type: feedbackTypeSchema,
+    priority: feedbackPrioritySchema,
+    category: feedbackCategorySchema,
+    status: feedbackStatusSchema,
   },
   consent: {
     create: createConsentRecordSchema,

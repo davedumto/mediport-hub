@@ -1,296 +1,602 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Label } from "@/components/ui/label";
-import { Calendar, ArrowLeft, User, UserCheck } from "lucide-react";
-import { CustomTabs } from "@/components/common/CustomTab";
-import { useParams, useRouter } from "next/navigation";
-import { mockPatients } from "../../../mock-data";
+import {
+  ArrowLeft,
+  Loader2,
+  Shield,
+  Clock,
+  Mail,
+  Phone,
+  Calendar,
+  User,
+  CheckCircle,
+  XCircle,
+  Heart,
+  Droplets,
+  AlertTriangle,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
-
-interface Appointment {
-    id: string;
-    startTime: string;
-    endTime: string;
-    type: string;
+interface PatientDetails {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  phone?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodType?: string;
+  status?: string;
+  assignedProviderId?: string;
+  isActive: boolean;
+  emailVerified: boolean;
+  mfaEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLogin?: string;
+  failedLoginAttempts: number;
+  lockedUntil?: string;
+  fullName: string;
+  isVerified: boolean;
+  hasMFA: boolean;
+  isLocked: boolean;
+  lastLoginFormatted: string;
+  createdAtFormatted: string;
+  updatedAtFormatted: string;
+  primaryRole: string;
+  assignedRoles: string[];
+  totalRoles: number;
+  patientSummary?: {
     status: string;
-    providerId?: string;
-    providerName?: string;
-    reason?: string;
-}
-interface Patient {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email?: string;
-    phone?: string;
-    dateOfBirth?: string;
-    gender?: string;
-    bloodType?: string;
-    status?: string;
-    assignedProviderId?: string;
-    appointments?: Appointment[];
-    allergies?: string[];
-    chronicConditions?: string[];
-    currentMedications?: string[];
-    createdAt?: string;
-}
-interface FormValues {
-    appointmentId?: string;
-    doctorId?: string;
+    hasConsent: boolean;
+    consentDate: string | null;
+    medicalConditions: number;
+    allergies: number;
+    medications: number;
+  };
+  consentSummary: {
+    totalConsents: number;
+    activeConsents: number;
+    latestConsent: string | null;
+  };
+  activitySummary: {
+    totalActions: number;
+    successfulActions: number;
+    lastAction: string | null;
+  };
 }
 
-const PatientDetailsPage: React.FC = () => {
-    const router = useRouter()
-    const params = useParams() as { id?: string } | undefined;
-    const { id } = params || {};
+const PatientDetailsPage = () => {
+  const params = useParams();
+  const router = useRouter();
+  const { user, tokens } = useAuth();
+  const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const [patient, setPatient] = useState<Patient | null>(null);
-
-    const { register, handleSubmit, setValue, watch } = useForm<FormValues>();
-
-    useEffect(() => {
-        register("appointmentId");
-        register("doctorId");
-    }, [register]);
-
-    const selectedAppointment = watch("appointmentId");
-    const selectedDoctor = watch("doctorId");
-
-    const age =
-        patient && patient.dateOfBirth
-            ? new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()
-            : null;
-
-    useEffect(() => {
-        if (id) {
-            const foundPatient = mockPatients.find((d: any) => d.id === id) as Patient | undefined;
-            setPatient(foundPatient ?? null);
-        }
-    }, [id]);
-
-    if (!id) {
-        return <div className="p-6">No patient id provided.</div>;
-    }
-
-    if (!patient) {
-        return (
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-4xl mx-auto">
-                    <div className="text-center py-12 text-gray-600">
-                        <p>Loading patient data or patient not found.</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    const onSubmit = (data: FormValues) => {
-        console.log("Assigning doctor", {
-            patientId: patient.id,
-            appointmentId: data.appointmentId,
-            doctorId: data.doctorId,
+  useEffect(() => {
+    const fetchPatientDetails = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/superadmin/users/${params.id}`, {
+          headers: {
+            Authorization: `Bearer ${tokens?.accessToken}`,
+          },
         });
-        // integrate API call here
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch patient details");
+        }
+
+        const data = await response.json();
+        setPatientDetails(data.data);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load patient details"
+        );
+        console.error("Error fetching patient details:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const personalDetailsContent = (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center">
-                        <User className="w-5 h-5 mr-2" />
-                        Personal Information
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Full Name</Label>
-                            <p className="text-base font-medium">{patient.firstName} {patient.lastName}</p>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Email Address</Label>
-                            <p className="text-base">{patient.email ?? "—"}</p>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Phone Number</Label>
-                            <p className="text-base">{patient.phone ?? "—"}</p>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Date of Birth</Label>
-                            <p className="text-base">{patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString() : "—"}</p>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Gender</Label>
-                            <p className="text-base">{patient.gender ?? "—"}</p>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Blood Type</Label>
-                            <Badge variant="secondary">{patient.bloodType ?? "—"}</Badge>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+    if (user && tokens?.accessToken && params.id) {
+      fetchPatientDetails();
+    }
+  }, [user, tokens, params.id]);
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Medical Information</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Allergies</Label>
-                            <div className="mt-2 space-y-1">
-                                {patient.allergies && patient.allergies.length > 0 ? (
-                                    patient.allergies.map((allergy, index) => (
-                                        <Badge key={index} variant="destructive" className="mr-1">{allergy}</Badge>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500">None</p>
-                                )}
-                            </div>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Chronic Conditions</Label>
-                            <div className="mt-2 space-y-1">
-                                {patient.chronicConditions && patient.chronicConditions.length > 0 ? (
-                                    patient.chronicConditions.map((condition, index) => (
-                                        <Badge key={index} variant="secondary" className="mr-1">{condition}</Badge>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500">None</p>
-                                )}
-                            </div>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Current Medications</Label>
-                            <div className="mt-2 space-y-1">
-                                {patient.currentMedications && patient.currentMedications.length > 0 ? (
-                                    patient.currentMedications.map((medication, index) => (
-                                        <Badge key={index} variant="outline" className="mr-1">{medication}</Badge>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500">None</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return "bg-purple-100 text-purple-800";
+      case "ADMIN":
+        return "bg-red-100 text-red-800";
+      case "DOCTOR":
+        return "bg-blue-100 text-blue-800";
+      case "NURSE":
+        return "bg-green-100 text-green-800";
+      case "PATIENT":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Account Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Status</Label>
-                            <Badge variant={patient.status === "ACTIVE" ? "default" : "secondary"}>{patient.status}</Badge>
-                        </div>
-                        <div>
-                            <Label className="text-sm font-medium text-gray-500">Registered</Label>
-                            <p className="text-base">{patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : "—"}</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-    );
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return "👑";
+      case "ADMIN":
+        return "⚙️";
+      case "DOCTOR":
+        return "👨‍⚕️";
+      case "NURSE":
+        return "👩‍⚕️";
+      case "PATIENT":
+        return "👤";
+      default:
+        return "❓";
+    }
+  };
 
-    const appointmentsContent = (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center">
-                        <Calendar className="w-5 h-5 mr-2" />
-                        Appointments ({patient.appointments?.length ?? 0})
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        {patient.appointments && patient.appointments.length > 0 ? (
-                            patient.appointments.map((appointment) => (
-                                <Card key={appointment.id} className="border-l-4 border-l-blue-500">
-                                    <CardContent className="p-4">
-                                        <div className="flex justify-between items-start">
-                                            <div className="space-y-2">
-                                                <div className="flex items-center space-x-2">
-                                                    <Badge variant="outline">{appointment.type}</Badge>
-                                                    <Badge variant={appointment.status === "SCHEDULED" ? "default" : appointment.status === "COMPLETED" ? "secondary" : appointment.status === "CANCELLED" ? "destructive" : "outline"}>
-                                                        {appointment.status}
-                                                    </Badge>
-                                                </div>
-                                                <p className="text-lg font-medium">{appointment.reason}</p>
-                                                <div className="text-sm text-gray-600 space-y-1">
-                                                    <p><strong>Date:</strong> {new Date(appointment.startTime).toLocaleDateString()}</p>
-                                                    <p><strong>Time:</strong> {new Date(appointment.startTime).toLocaleTimeString()} - {new Date(appointment.endTime).toLocaleTimeString()}</p>
-                                                    <p><strong>Provider:</strong> {appointment.providerName}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))
-                        ) : (
-                            <div className="text-center py-8 text-gray-500">
-                                <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>No appointments scheduled</p>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-    );
+  const getGenderIcon = (gender?: string) => {
+    switch (gender) {
+      case "MALE":
+        return "👨";
+      case "FEMALE":
+        return "👩";
+      default:
+        return "👤";
+    }
+  };
 
+  const getBloodTypeColor = (bloodType?: string) => {
+    switch (bloodType) {
+      case "O_POSITIVE":
+        return "bg-red-100 text-red-800";
+      case "A_POSITIVE":
+        return "bg-blue-100 text-blue-800";
+      case "B_POSITIVE":
+        return "bg-green-100 text-green-800";
+      case "AB_POSITIVE":
+        return "bg-purple-100 text-purple-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
 
-
-    const tabs = [
-        { id: "details", content: personalDetailsContent },
-        { id: "appointments", content: appointmentsContent },
-    ];
-
-    const tabTitles = ["Personal Details", "Appointments",];
-
+  if (loading) {
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-4xl mx-auto">
-                <div className="mb-6">
-                    <Button variant="ghost" className="mb-4" onClick={() => {
-                        router.back()
-                    }}>
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Patients
-                    </Button>
-
-                    <div className="flex items-center space-x-4 mb-6">
-                        <Avatar className="h-20 w-20">
-                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(patient.firstName ?? "")}`} />
-                            <AvatarFallback className="bg-purple-100 text-purple-700">{(patient.firstName?.[0] ?? "") + (patient.lastName?.[0] ?? "")}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">{patient.firstName} {patient.lastName}</h1>
-                            <p className="text-lg text-gray-600">Age: {age ?? "—"} • {patient.gender ?? "—"}</p>
-                            <Badge variant="outline" className="mt-2"><User className="w-3 h-3 mr-1" />Patient</Badge>
-                        </div>
-                    </div>
-                </div>
-
-                <CustomTabs tabTitles={tabTitles} tabs={tabs} />
-            </div>
+      <div className="w-full flex justify-center items-center py-20">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading patient details...</span>
         </div>
+      </div>
     );
+  }
+
+  if (error || !patientDetails) {
+    return (
+      <div className="w-full px-6 py-10">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">
+            Error loading patient details: {error || "Patient not found"}
+          </p>
+          <Button
+            onClick={() => router.back()}
+            variant="outline"
+            className="mt-2"
+          >
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full px-6 py-6">
+      {/* Header */}
+      <div className="flex items-center space-x-4 mb-6">
+        <Button onClick={() => router.back()} variant="outline" size="sm">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold">Patient Details</h1>
+      </div>
+
+      {/* Patient Profile Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center space-x-4">
+            <Avatar className="h-20 w-20">
+              <AvatarImage
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${patientDetails.firstName}`}
+              />
+              <AvatarFallback className="bg-orange-100 text-orange-700 text-xl">
+                {patientDetails.firstName[0]}
+                {patientDetails.lastName[0]}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <CardTitle className="text-2xl">
+                {patientDetails.fullName}
+              </CardTitle>
+              <p className="text-gray-600">
+                {patientDetails.gender
+                  ? `${patientDetails.gender} Patient`
+                  : "Patient"}
+                {patientDetails.dateOfBirth &&
+                  ` • Age: ${
+                    new Date().getFullYear() -
+                    new Date(patientDetails.dateOfBirth).getFullYear()
+                  }`}
+              </p>
+              <div className="flex items-center space-x-2 mt-2">
+                <Badge className={getRoleColor(patientDetails.role)}>
+                  {getRoleIcon(patientDetails.role)} {patientDetails.role}
+                </Badge>
+                {patientDetails.isActive ? (
+                  <Badge className="bg-green-100 text-green-800">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Active
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-100 text-red-800">
+                    <XCircle className="w-3 h-3 mr-1" />
+                    Inactive
+                  </Badge>
+                )}
+                {patientDetails.isLocked && (
+                  <Badge className="bg-yellow-100 text-yellow-800">
+                    🔒 Locked
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Personal Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <User className="w-5 h-5 mr-2" />
+              Personal Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Email
+                </label>
+                <div className="flex items-center mt-1">
+                  <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                  <span className="truncate">{patientDetails.email}</span>
+                </div>
+              </div>
+              {patientDetails.phone && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Phone
+                  </label>
+                  <div className="flex items-center mt-1">
+                    <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                    <span>{patientDetails.phone}</span>
+                  </div>
+                </div>
+              )}
+              {patientDetails.dateOfBirth && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Date of Birth
+                  </label>
+                  <div className="flex items-center mt-1">
+                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                    <span>{patientDetails.dateOfBirth}</span>
+                  </div>
+                </div>
+              )}
+              {patientDetails.gender && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Gender
+                  </label>
+                  <div className="flex items-center mt-1">
+                    <User className="w-4 h-4 mr-2 text-gray-400" />
+                    <span>
+                      {getGenderIcon(patientDetails.gender)}{" "}
+                      {patientDetails.gender}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {patientDetails.bloodType && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Blood Type
+                  </label>
+                  <div className="mt-1">
+                    <Badge
+                      className={getBloodTypeColor(patientDetails.bloodType)}
+                    >
+                      <Droplets className="w-3 h-3 mr-1" />
+                      {patientDetails.bloodType.replace("_", " ")}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Status
+                </label>
+                <div className="mt-1">
+                  <Badge
+                    variant="outline"
+                    className={
+                      patientDetails.isActive
+                        ? "border-green-200 text-green-700"
+                        : "border-red-200 text-red-700"
+                    }
+                  >
+                    {patientDetails.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Medical Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Heart className="w-5 h-5 mr-2" />
+              Medical Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {patientDetails.patientSummary ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Patient Status
+                    </label>
+                    <div className="mt-1">
+                      <Badge variant="outline">
+                        {patientDetails.patientSummary.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      GDPR Consent
+                    </label>
+                    <div className="mt-1">
+                      <Badge
+                        variant="outline"
+                        className={
+                          patientDetails.patientSummary.hasConsent
+                            ? "border-green-200 text-green-700"
+                            : "border-red-200 text-red-700"
+                        }
+                      >
+                        {patientDetails.patientSummary.hasConsent
+                          ? "Consented"
+                          : "No Consent"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center p-3 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {patientDetails.patientSummary.medicalConditions}
+                    </div>
+                    <div className="text-sm text-blue-600">Conditions</div>
+                  </div>
+                  <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {patientDetails.patientSummary.allergies}
+                    </div>
+                    <div className="text-sm text-yellow-600">Allergies</div>
+                  </div>
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {patientDetails.patientSummary.medications}
+                    </div>
+                    <div className="text-sm text-green-600">Medications</div>
+                  </div>
+                </div>
+                {patientDetails.patientSummary.consentDate && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Consent Date
+                    </label>
+                    <div className="mt-1 text-sm text-gray-600">
+                      {patientDetails.patientSummary.consentDate}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p>No medical information available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Account Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Shield className="w-5 h-5 mr-2" />
+              Account Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Email Verified
+                </label>
+                <div className="mt-1">
+                  <Badge
+                    variant="outline"
+                    className={
+                      patientDetails.isVerified
+                        ? "border-green-200 text-green-700"
+                        : "border-red-200 text-red-700"
+                    }
+                  >
+                    {patientDetails.isVerified ? "Verified" : "Not Verified"}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  MFA Status
+                </label>
+                <div className="mt-1">
+                  <Badge
+                    variant="outline"
+                    className={
+                      patientDetails.hasMFA
+                        ? "border-green-200 text-green-700"
+                        : "border-yellow-200 text-yellow-700"
+                    }
+                  >
+                    {patientDetails.hasMFA ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Failed Logins
+                </label>
+                <div className="mt-1">
+                  <span
+                    className={
+                      patientDetails.failedLoginAttempts > 0
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }
+                  >
+                    {patientDetails.failedLoginAttempts}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Last Login
+                </label>
+                <div className="mt-1 text-sm text-gray-600">
+                  {patientDetails.lastLoginFormatted}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Consent & Activity Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Clock className="w-5 h-5 mr-2" />
+              Consent & Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Total Consents
+                </label>
+                <div className="mt-1 text-lg font-semibold">
+                  {patientDetails.consentSummary.totalConsents}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Active Consents
+                </label>
+                <div className="mt-1 text-lg font-semibold text-green-600">
+                  {patientDetails.consentSummary.activeConsents}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">
+                Latest Consent
+              </label>
+              <div className="mt-1 text-sm text-gray-600">
+                {patientDetails.consentSummary.latestConsent ||
+                  "No consent records"}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Total Actions
+                </label>
+                <div className="mt-1 text-lg font-semibold">
+                  {patientDetails.activitySummary.totalActions}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Successful Actions
+                </label>
+                <div className="mt-1 text-lg font-semibold text-green-600">
+                  {patientDetails.activitySummary.successfulActions}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">
+                Last Action
+              </label>
+              <div className="mt-1 text-sm text-gray-600">
+                {patientDetails.activitySummary.lastAction ||
+                  "No recent activity"}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">
+                Account Created
+              </label>
+              <div className="mt-1 text-sm text-gray-600">
+                {patientDetails.createdAtFormatted}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">
+                Last Updated
+              </label>
+              <div className="mt-1 text-sm text-gray-600">
+                {patientDetails.updatedAtFormatted}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 };
 
 export default PatientDetailsPage;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { RoleService } from "../../../../../services/roleService";
 import { AuditService, AuditAction } from "../../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../../utils/appRouterHelpers";
-import { logger } from "../../../../../lib/logger";
+import logger from "../../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {

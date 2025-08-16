@@ -1,4 +1,11 @@
-import { PrismaClient, Gender, BloodType } from "@prisma/client";
+import {
+  PrismaClient,
+  Gender,
+  BloodType,
+  UserRole,
+  VerificationStatus,
+} from "@prisma/client";
+import { hashPassword } from "../src/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -11,7 +18,7 @@ async function main() {
       name: "Super Admin",
       description: "Full system access and control",
       permissions: ["*"],
-      isSystem: true,
+      isSystemRole: true,
     },
     {
       name: "Doctor",
@@ -26,7 +33,7 @@ async function main() {
         "consultations:read",
         "consultations:write",
       ],
-      isSystem: true,
+      isSystemRole: true,
     },
     {
       name: "Nurse",
@@ -37,7 +44,7 @@ async function main() {
         "appointments:read",
         "appointments:write",
       ],
-      isSystem: true,
+      isSystemRole: true,
     },
     {
       name: "Patient",
@@ -47,13 +54,13 @@ async function main() {
         "own_appointments:read",
         "own_appointments:write",
       ],
-      isSystem: true,
+      isSystemRole: true,
     },
     {
       name: "Data Analyst",
       description: "Analytics and reporting access",
       permissions: ["analytics:read", "reports:read", "statistics:read"],
-      isSystem: true,
+      isSystemRole: true,
     },
   ];
 
@@ -69,17 +76,19 @@ async function main() {
   // Create super admin user
   const superAdmin = await prisma.user.upsert({
     where: { email: "admin@edith.com" },
-    update: {},
+    update: {
+      // Force update password hash even for existing users
+      passwordHash: await hashPassword("Admin123!"),
+    },
     create: {
       email: "admin@edith.com",
-      passwordHash:
-        "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.s6mG", // admin123
+      passwordHash: await hashPassword("Admin123!"),
       firstName: "Super",
       lastName: "Admin",
-      role: "SUPER_ADMIN",
+      role: UserRole.SUPER_ADMIN,
       isActive: true,
       emailVerified: true,
-      verificationStatus: "VERIFIED",
+      verificationStatus: "VERIFIED" as const,
       mfaEnabled: false,
       failedLoginAttempts: 0,
       passwordHistory: [],
@@ -113,19 +122,21 @@ async function main() {
   // Create sample doctor
   const doctor = await prisma.user.upsert({
     where: { email: "dr.smith@edith.com" },
-    update: {},
+    update: {
+      // Force update password hash even for existing users
+      passwordHash: await hashPassword("Doctor123!"),
+    },
     create: {
       email: "dr.smith@edith.com",
-      passwordHash:
-        "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.s6mG", // doctor123
+      passwordHash: await hashPassword("Doctor123!"),
       firstName: "Dr. John",
       lastName: "Smith",
-      role: "DOCTOR",
+      role: UserRole.DOCTOR,
       specialty: "General Medicine",
       medicalLicenseNumber: "MD12345",
       isActive: true,
       emailVerified: true,
-      verificationStatus: "VERIFIED",
+      verificationStatus: "VERIFIED" as const,
       mfaEnabled: false,
       failedLoginAttempts: 0,
       passwordHistory: [],
@@ -154,6 +165,172 @@ async function main() {
   });
 
   console.log("Sample doctor role assigned");
+
+  // Create additional mock doctors
+  const additionalDoctors = [
+    {
+      email: "dr.johnson@edith.com",
+      passwordHash: await hashPassword("Doctor123!"),
+      firstName: "Dr. Sarah",
+      lastName: "Johnson",
+      role: UserRole.DOCTOR,
+      specialty: "Cardiology",
+      medicalLicenseNumber: "MD67890",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+    {
+      email: "dr.williams@edith.com",
+      passwordHash: await hashPassword("Doctor123!"),
+      firstName: "Dr. Michael",
+      lastName: "Williams",
+      role: UserRole.DOCTOR,
+      specialty: "Pediatrics",
+      medicalLicenseNumber: "MD11111",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+    {
+      email: "dr.brown@edith.com",
+      passwordHash: await hashPassword("Doctor123!"),
+      firstName: "Dr. Emily",
+      lastName: "Brown",
+      role: UserRole.DOCTOR,
+      specialty: "Neurology",
+      medicalLicenseNumber: "MD22222",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+  ];
+
+  for (const doctorData of additionalDoctors) {
+    const additionalDoctor = await prisma.user.upsert({
+      where: { email: doctorData.email },
+      update: {
+        passwordHash: doctorData.passwordHash,
+        firstName: doctorData.firstName,
+        lastName: doctorData.lastName,
+        specialty: doctorData.specialty,
+        medicalLicenseNumber: doctorData.medicalLicenseNumber,
+      },
+      create: doctorData,
+    });
+
+    // Assign doctor role
+    await prisma.userRoleAssignment.upsert({
+      where: {
+        userId_roleId: {
+          userId: additionalDoctor.id,
+          roleId: doctorRole!.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: additionalDoctor.id,
+        roleId: doctorRole!.id,
+        grantedBy: superAdmin.id,
+      },
+    });
+    console.log(
+      `Additional doctor ${additionalDoctor.firstName} ${additionalDoctor.lastName} created`
+    );
+  }
+
+  // Create mock nurses
+  const nurses = [
+    {
+      email: "nurse.anderson@edith.com",
+      passwordHash: await hashPassword("Nurse123!"),
+      firstName: "Nurse Lisa",
+      lastName: "Anderson",
+      role: UserRole.NURSE,
+      specialty: "Emergency Care",
+      medicalLicenseNumber: "RN33333",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+    {
+      email: "nurse.garcia@edith.com",
+      passwordHash: await hashPassword("Nurse123!"),
+      firstName: "Nurse Carlos",
+      lastName: "Garcia",
+      role: UserRole.NURSE,
+      specialty: "ICU",
+      medicalLicenseNumber: "RN44444",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+    {
+      email: "nurse.taylor@edith.com",
+      passwordHash: await hashPassword("Nurse123!"),
+      firstName: "Nurse Jennifer",
+      lastName: "Taylor",
+      role: UserRole.NURSE,
+      specialty: "Surgery",
+      medicalLicenseNumber: "RN55555",
+      isActive: true,
+      emailVerified: true,
+      verificationStatus: "VERIFIED" as const,
+      mfaEnabled: false,
+      failedLoginAttempts: 0,
+      passwordHistory: [],
+    },
+  ];
+
+  for (const nurseData of nurses) {
+    const nurse = await prisma.user.upsert({
+      where: { email: nurseData.email },
+      update: {
+        passwordHash: nurseData.passwordHash,
+        firstName: nurseData.firstName,
+        lastName: nurseData.lastName,
+        specialty: nurseData.specialty,
+        medicalLicenseNumber: nurseData.medicalLicenseNumber,
+      },
+      create: nurseData,
+    });
+
+    // Assign nurse role
+    const nurseRole = await prisma.role.findUnique({
+      where: { name: "Nurse" },
+    });
+
+    await prisma.userRoleAssignment.upsert({
+      where: {
+        userId_roleId: {
+          userId: nurse.id,
+          roleId: nurseRole!.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: nurse.id,
+        roleId: nurseRole!.id,
+        grantedBy: superAdmin.id,
+      },
+    });
+    console.log(`Nurse ${nurse.firstName} ${nurse.lastName} created`);
+  }
 
   // Create sample patients with explicit typing
   const patients: Array<{
@@ -201,75 +378,131 @@ async function main() {
   ];
 
   for (const patientData of patients) {
-    const patient = await prisma.patient.create({
-      data: {
+    const patient = await prisma.patient.upsert({
+      where: { email: patientData.email },
+      update: {
+        // Update existing patient data
+        firstName: patientData.firstName,
+        lastName: patientData.lastName,
+        dateOfBirth: patientData.dateOfBirth,
+        gender: patientData.gender,
+        bloodType: patientData.bloodType,
+        allergies: patientData.allergies,
+        chronicConditions: patientData.chronicConditions,
+        currentMedications: patientData.currentMedications,
+        gdprConsent: patientData.gdprConsent,
+        gdprConsentDate: patientData.gdprConsentDate,
+        gdprConsentVersion: patientData.gdprConsentVersion,
+        assignedProviderId: doctor.id,
+        createdBy: superAdmin.id,
+      },
+      create: {
         ...patientData,
         assignedProviderId: doctor.id,
         createdBy: superAdmin.id,
       },
     });
-    console.log(`Patient ${patient.firstName} ${patient.lastName} created`);
+    console.log(
+      `Patient ${patient.firstName} ${patient.lastName} created/updated`
+    );
   }
 
   // Create sample medical records
-  await prisma.medicalRecord.create({
-    data: {
+  const existingMedicalRecord = await prisma.medicalRecord.findFirst({
+    where: {
       patientId: (await prisma.patient.findFirst({
         where: { email: "john.doe@example.com" },
       }))!.id,
-      providerId: doctor.id,
-      type: "CONSULTATION",
       title: "Annual Physical Examination",
-      recordDate: new Date(),
-      isPrivate: false,
-      createdBy: doctor.id,
     },
   });
 
-  console.log("Sample medical record created");
+  if (!existingMedicalRecord) {
+    await prisma.medicalRecord.create({
+      data: {
+        patientId: (await prisma.patient.findFirst({
+          where: { email: "john.doe@example.com" },
+        }))!.id,
+        providerId: doctor.id,
+        type: "CONSULTATION",
+        title: "Annual Physical Examination",
+        recordDate: new Date(),
+        isPrivate: false,
+        createdBy: doctor.id,
+      },
+    });
+    console.log("Sample medical record created");
+  } else {
+    console.log("Sample medical record already exists, skipping creation");
+  }
 
   // Create sample appointment
-  await prisma.appointment.create({
-    data: {
+  const existingAppointment = await prisma.appointment.findFirst({
+    where: {
       patientId: (await prisma.patient.findFirst({
         where: { email: "john.doe@example.com" },
       }))!.id,
-      providerId: doctor.id,
-      startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
-      endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000), // +30 minutes
-      type: "FOLLOW_UP",
-      status: "SCHEDULED",
       reason: "Follow-up on blood pressure medication",
-      priority: "NORMAL",
-      locationType: "IN_PERSON",
-      roomNumber: "101",
-      createdBy: doctor.id,
     },
   });
 
-  console.log("Sample appointment created");
+  if (!existingAppointment) {
+    await prisma.appointment.create({
+      data: {
+        patientId: (await prisma.patient.findFirst({
+          where: { email: "john.doe@example.com" },
+        }))!.id,
+        providerId: doctor.id,
+        startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
+        endTime: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000
+        ), // +30 minutes
+        type: "FOLLOW_UP",
+        status: "SCHEDULED",
+        reason: "Follow-up on blood pressure medication",
+        priority: "NORMAL",
+        locationType: "IN_PERSON",
+        roomNumber: "101",
+        createdBy: doctor.id,
+      },
+    });
+    console.log("Sample appointment created");
+  } else {
+    console.log("Sample appointment already exists, skipping creation");
+  }
 
   // Create sample consent record
-  await prisma.consentRecord.create({
-    data: {
-      userId: superAdmin.id, // Use the super admin user ID instead of patient ID
+  const existingConsent = await prisma.consentRecord.findFirst({
+    where: {
+      userId: superAdmin.id,
       consentType: "DATA_PROCESSING",
       purpose: "Medical treatment and healthcare management",
-      granted: true,
-      consentText:
-        "I consent to the processing of my personal data for medical treatment purposes.",
-      consentVersion: "1.0",
-      legalBasis: "CONSENT",
-      grantedAt: new Date(),
     },
   });
 
-  console.log("Sample consent record created");
+  if (!existingConsent) {
+    await prisma.consentRecord.create({
+      data: {
+        userId: superAdmin.id, // Use the super admin user ID instead of patient ID
+        consentType: "DATA_PROCESSING",
+        purpose: "Medical treatment and healthcare management",
+        granted: true,
+        consentText:
+          "I consent to the processing of my personal data for medical treatment purposes.",
+        consentVersion: "1.0",
+        legalBasis: "CONSENT",
+        grantedAt: new Date(),
+      },
+    });
+    console.log("Sample consent record created");
+  } else {
+    console.log("Sample consent record already exists, skipping creation");
+  }
 
   console.log("Database seeding completed successfully!");
   console.log("\nSample Data Created:");
-  console.log("- 1 Super Admin (admin@edith.com / admin123)");
-  console.log("- 1 Doctor (dr.smith@edith.com / doctor123)");
+  console.log("- 1 Super Admin (admin@edith.com / Admin123!)");
+  console.log("- 1 Doctor (dr.smith@edith.com / Doctor123!)");
   console.log("- 2 Patients");
   console.log("- 1 Medical Record");
   console.log("- 1 Appointment");

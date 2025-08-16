@@ -3,7 +3,7 @@ import { Role, Permission, RoleStatistics } from "../types/auth";
 import { AppError, ErrorCodes } from "../utils/errors";
 import { AuditService, AuditAction } from "../lib/audit";
 import { ROLE_PERMISSIONS } from "../lib/permissions";
-import { logger } from "../utils/logger";
+import logger from "../lib/logger";
 
 export class RoleService {
   // Assign role to user
@@ -399,7 +399,7 @@ export class RoleService {
     } catch (error) {
       logger.error("Failed to get role statistics:", error);
       throw new AppError(
-        ErrorCodes.INTERNAL_SERVER_ERROR,
+        ErrorCodes.INTERNAL_ERROR,
         "Failed to retrieve role statistics",
         500
       );

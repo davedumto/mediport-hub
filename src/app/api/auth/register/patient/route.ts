@@ -1,49 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hashPassword, generateMFASecret } from "../../../../../lib/auth";
-import { ConsentService } from "../../../../../services/consentService";
-import { AuditService, AuditAction } from "../../../../../lib/audit";
-import prisma from "../../../../../lib/db";
-import logger from "../../../../../lib/logger";
-import { AppError } from "../../../../../utils/errors";
-import { extractRequestInfoFromRequest } from "../../../../../utils/appRouterHelpers";
+import { z } from "zod";
+import { prisma } from "@/lib/db";
+import { hashPassword, generateMFASecret } from "@/lib/auth";
+import { ConsentService } from "@/services/consentService";
+import { AuditService } from "@/lib/audit";
+import { AuditAction } from "@/lib/audit";
+import logger from "@/lib/logger";
+import { emailService } from "@/services/emailService";
+import { extractRequestInfoFromRequest } from "@/utils/appRouterHelpers";
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
     const body = await request.json();
     const { fullName, email, password, gdprConsent } = body;
 
-    // Simple validation
-    if (!fullName || !email || !password || gdprConsent !== true) {
+    // Validate required fields
+    if (!fullName || !email || !password || gdprConsent === undefined) {
       return NextResponse.json(
         {
           error: "Bad Request",
           message: "Validation failed.",
-          details: ["Missing required fields"],
+          details: [
+            "Full name, email, password, and GDPR consent are required",
+          ],
         },
         { status: 400 }
       );
     }
 
-    // Extract request info for audit
-    const requestInfo = extractRequestInfoFromRequest(request);
-
-    // Verify GDPR consent is explicitly given
+    // Validate GDPR consent
     if (!gdprConsent) {
-      await AuditService.log({
-        userEmail: email,
-        action: AuditAction.REGISTRATION_FAILED,
-        resource: "user",
-        success: false,
-        errorMessage: "GDPR consent not provided",
-        ...requestInfo,
-      });
-
       return NextResponse.json(
         {
           error: "Bad Request",
           message: "Validation failed.",
-          details: ["GDPR consent is required to register"],
+          details: ["GDPR consent is required to proceed"],
         },
         { status: 400 }
       );
@@ -55,27 +46,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      await AuditService.log({
-        userEmail: email,
-        action: AuditAction.REGISTRATION_FAILED,
-        resource: "user",
-        success: false,
-        errorMessage: "User already exists",
-        ...requestInfo,
-      });
-
       return NextResponse.json(
         {
           error: "Bad Request",
-          message: "Validation failed.",
-          details: ["User with this email already exists"],
+          message: "User already exists",
         },
         { status: 400 }
       );
     }
 
+    const requestInfo = extractRequestInfoFromRequest(request);
+
     // Parse full name into first and last name
-    const nameParts = fullName.trim().split(/\s+/);
+    const nameParts = fullName.trim().split(" ");
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
 
@@ -104,7 +87,7 @@ export async function POST(request: NextRequest) {
         firstName,
         lastName,
         role: "PATIENT",
-        verificationStatus: "VERIFIED",
+        verificationStatus: "PENDING_VERIFICATION", // Changed from VERIFIED to PENDING_VERIFICATION
         mfaSecret,
         mfaEnabled: false,
         isActive: true,
@@ -113,7 +96,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create corresponding Patient record
+    // Create corresponding Patient record with default values
+    // Note: PII fields are encrypted at the database level using the existing encryption system
     const patient = await prisma.patient.create({
       data: {
         userId: user.id, // Link to the user record
@@ -127,6 +111,8 @@ export async function POST(request: NextRequest) {
         gdprConsentDate: new Date(),
         gdprConsentVersion: "1.0",
         createdBy: user.id,
+        // Encrypted fields will be handled by the existing encryption system
+        // phoneEncrypted, addressStreetEncrypted, etc. are optional and can be set later
       },
     });
 
@@ -148,36 +134,100 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Log successful registration
-    await AuditService.log({
-      userId: user.id,
-      userEmail: user.email,
-      userRole: user.role,
-      action: AuditAction.REGISTRATION_SUCCESS,
-      resource: "user",
-      resourceId: user.id,
-      success: true,
-      changes: {
-        email,
-        firstName,
-        lastName,
-        role: "PATIENT",
-        verificationStatus: "VERIFIED",
-        mfaSecretGenerated: true,
-        gdprConsent: true,
-        consentRecordId: consentRecord.id,
-        patientRecordId: patient.id,
-        patientCreated: true,
-      },
-      ...requestInfo,
-    });
+    // Generate and store OTP for verification
+    try {
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Store OTP in database
+      await prisma.verificationCode.create({
+        data: {
+          userId: user.id,
+          code: otp,
+          type: "EMAIL_VERIFICATION",
+          expiresAt,
+          isUsed: false,
+        },
+      });
+
+      // Send verification email
+      await emailService.sendVerificationEmail({
+        email: user.email,
+        firstName: user.firstName,
+        otp,
+        expiresIn: "15 minutes",
+      });
+
+      // Log successful registration
+      await AuditService.log({
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.role,
+        action: AuditAction.REGISTRATION_SUCCESS,
+        resource: "user",
+        resourceId: user.id,
+        success: true,
+        changes: {
+          email,
+          firstName,
+          lastName,
+          role: "PATIENT",
+          verificationStatus: "PENDING_VERIFICATION",
+          mfaSecretGenerated: true,
+          gdprConsent: true,
+          consentRecordId: consentRecord.id,
+          patientRecordId: patient.id,
+          patientCreated: true,
+          verificationEmailSent: true,
+          otpGenerated: true,
+          expiresAt,
+        },
+        ...requestInfo,
+      });
+
+      logger.info(`Patient registration successful for ${user.email}`);
+    } catch (emailError) {
+      // Log email failure but don't fail the registration
+      logger.warn(
+        `Failed to send verification email to ${user.email}:`,
+        emailError
+      );
+
+      // Still log the registration success
+      await AuditService.log({
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.role,
+        action: AuditAction.REGISTRATION_SUCCESS,
+        resource: "user",
+        resourceId: user.id,
+        success: true,
+        changes: {
+          email,
+          firstName,
+          lastName,
+          role: "PATIENT",
+          verificationStatus: "PENDING_VERIFICATION",
+          mfaSecretGenerated: true,
+          gdprConsent: true,
+          consentRecordId: consentRecord.id,
+          patientRecordId: patient.id,
+          patientCreated: true,
+          verificationEmailSent: false,
+          emailError:
+            emailError instanceof Error ? emailError.message : "Unknown error",
+        },
+        ...requestInfo,
+      });
+    }
 
     // Return success response matching the API specification
     return NextResponse.json(
       {
         success: true,
         message:
-          "Patient registration successful. Please check your email to verify your account.",
+          "Patient registration successful! Please check your email to verify your account.",
         data: {
           user: {
             id: user.id,
@@ -185,6 +235,7 @@ export async function POST(request: NextRequest) {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
+            verificationStatus: user.verificationStatus, // Added
           },
           patient: {
             id: patient.id,
@@ -202,22 +253,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.error("Patient registration error:", error);
 
-    if (error instanceof AppError) {
-      return NextResponse.json(
-        {
-          error: "Bad Request",
-          message: error.message,
-          details: error.details || [],
-        },
-        { status: error.statusCode }
-      );
-    }
-
     return NextResponse.json(
       {
         error: "Internal Server Error",
-        message: "An unexpected error occurred",
-        details: ["Please try again later"],
+        message: "An unexpected error occurred during registration",
       },
       { status: 500 }
     );

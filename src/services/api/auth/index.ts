@@ -1,8 +1,5 @@
-import {
-  createApi,
-
-} from "@reduxjs/toolkit/query/react";
-import { baseQueryWithReauth, clearAuthTokens, setAccessToken } from "..";
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { baseQueryWithReauth, setAccessToken, clearAuthTokens } from "..";
 
 export const authApi = createApi({
   reducerPath: "authApi",
@@ -85,7 +82,7 @@ export const authApi = createApi({
         message?: string;
         data?: { userId?: string; email?: string; passwordChangedAt?: string };
       },
-      ResetPasswordRequest
+      { token: string; newPassword: string; confirmPassword: string }
     >({
       query: (body) => ({
         url: "/api/auth/reset-password",
@@ -101,7 +98,7 @@ export const authApi = createApi({
         message?: string;
         data?: { userId?: string; email?: string; passwordChangedAt?: string };
       },
-      ChangePasswordRequest
+      { currentPassword: string; newPassword: string; confirmPassword: string }
     >({
       query: (body) => ({
         url: "/api/auth/change-password",
@@ -167,5 +164,3 @@ export const {
   useTestAuthQuery,
   useTestRoleQuery,
 } = authApi;
-
-

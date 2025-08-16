@@ -32,16 +32,23 @@ export async function POST(request: NextRequest) {
     // Extract request info for audit
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Find user
+    // Fetch user with roles
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        userRoles: { include: { role: true } },
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
       },
     });
 
     if (!user) {
-      await AuditService.logLoginFailed(email, requestInfo, "User not found");
+      await AuditService.logLoginFailed(email, requestInfo, "User not found", {
+        failedAttempts: 0,
+        accountLocked: false,
+      });
 
       return NextResponse.json(
         {
@@ -173,9 +180,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate tokens
-    const permissions = user.userRoles.flatMap(
-      (ur) => ur.role.permissions as string[]
-    );
+    const permissions =
+      user.userRoles?.flatMap((ur) => ur.role.permissions as string[]) || [];
     const tokens = generateTokens({
       userId: user.id,
       email: user.email,
@@ -229,9 +235,10 @@ export async function POST(request: NextRequest) {
       {
         message: "Login successful.",
         accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
         user: {
           id: user.id,
-          role: user.role.toLowerCase(),
+          role: user.role, // Return the exact role value, not lowercase
           status: user.isActive ? "active" : "inactive",
         },
       },

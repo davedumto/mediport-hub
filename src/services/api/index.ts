@@ -1,6 +1,16 @@
 import { fetchBaseQuery, FetchArgs } from "@reduxjs/toolkit/query/react";
 import { error } from "console";
 
+// Define the RefreshResponse type locally to avoid conflicts
+interface RefreshResponse {
+  success: boolean;
+  data: {
+    accessToken: string;
+    expiresAt: string;
+    sessionId?: string;
+  };
+}
+
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 

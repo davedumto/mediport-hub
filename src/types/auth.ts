@@ -2,11 +2,11 @@ import { UserRole } from "@prisma/client";
 
 // Healthcare Roles Definition
 export enum Role {
-  SUPER_ADMIN = "SUPER_ADMIN", // Full system access
-  ADMIN = "ADMIN", // User management, system config
-  DOCTOR = "DOCTOR", // Full patient records access
-  NURSE = "NURSE", // Limited patient access (assigned only)
-  PATIENT = "PATIENT", // Own records only
+  SUPER_ADMIN = "Super Admin", // Full system access
+  ADMIN = "Admin", // User management, system config
+  DOCTOR = "Doctor", // Full patient records access
+  NURSE = "Nurse", // Limited patient access (assigned only)
+  PATIENT = "Patient", // Own records only
 }
 
 // Permission system with granular control
