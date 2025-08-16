@@ -1,303 +1,318 @@
-import { 
-  hashPassword, 
-  verifyPassword, 
-  generateTokens, 
+import {
+  hashPassword,
+  verifyPassword,
+  generateTokens,
   verifyAccessToken,
   generateMFASecret,
   verifyMFACode,
   checkAccountLockout,
   validatePasswordHistory,
-  updatePasswordHistory
-} from '@/lib/auth'
-import prisma from '@/lib/db'
+  updatePasswordHistory,
+} from "../../../src/lib/auth";
+import prisma from "../../../src/lib/db";
 
 // Mock Prisma
-jest.mock('@/lib/db', () => ({
+jest.mock("@/lib/db", () => ({
   user: {
     findUnique: jest.fn(),
     update: jest.fn(),
   },
-}))
+}));
 
 // Mock environment variables
-const originalEnv = process.env
+const originalEnv = process.env;
 
 beforeEach(() => {
-  jest.clearAllMocks()
+  jest.clearAllMocks();
   process.env = {
     ...originalEnv,
-    JWT_SECRET: 'test-jwt-secret-key-for-testing-purposes-only',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-key-for-testing-purposes-only',
-  }
-})
+    JWT_SECRET: "test-jwt-secret-key-for-testing-purposes-only",
+    JWT_REFRESH_SECRET: "test-refresh-secret-key-for-testing-purposes-only",
+  };
+});
 
 afterEach(() => {
-  process.env = originalEnv
-})
+  process.env = originalEnv;
+});
 
-describe('Authentication Utilities', () => {
-  describe('Password Hashing', () => {
-    test('hashes password correctly', async () => {
-      const password = 'testPassword123'
-      const hash = await hashPassword(password)
-      
-      expect(hash).toBeDefined()
-      expect(hash).not.toBe(password)
-      expect(hash.length).toBeGreaterThan(0)
-    })
+describe("Authentication Utilities", () => {
+  describe("Password Hashing", () => {
+    test("hashes password correctly", async () => {
+      const password = "testPassword123";
+      const hash = await hashPassword(password);
 
-    test('generates different hashes for same password', async () => {
-      const password = 'testPassword123'
-      const hash1 = await hashPassword(password)
-      const hash2 = await hashPassword(password)
-      
-      expect(hash1).not.toBe(hash2)
-    })
+      expect(hash).toBeDefined();
+      expect(hash).not.toBe(password);
+      expect(hash.length).toBeGreaterThan(0);
+    });
 
-    test('verifies correct password', async () => {
-      const password = 'testPassword123'
-      const hash = await hashPassword(password)
-      const isValid = await verifyPassword(password, hash)
-      
-      expect(isValid).toBe(true)
-    })
+    test("generates different hashes for same password", async () => {
+      const password = "testPassword123";
+      const hash1 = await hashPassword(password);
+      const hash2 = await hashPassword(password);
 
-    test('rejects incorrect password', async () => {
-      const password = 'testPassword123'
-      const wrongPassword = 'wrongPassword123'
-      const hash = await hashPassword(password)
-      const isValid = await verifyPassword(wrongPassword, hash)
-      
-      expect(isValid).toBe(false)
-    })
-  })
+      expect(hash1).not.toBe(hash2);
+    });
 
-  describe('JWT Token Generation', () => {
+    test("verifies correct password", async () => {
+      const password = "testPassword123";
+      const hash = await hashPassword(password);
+      const isValid = await verifyPassword(password, hash);
+
+      expect(isValid).toBe(true);
+    });
+
+    test("rejects incorrect password", async () => {
+      const password = "testPassword123";
+      const wrongPassword = "wrongPassword123";
+      const hash = await hashPassword(password);
+      const isValid = await verifyPassword(wrongPassword, hash);
+
+      expect(isValid).toBe(false);
+    });
+  });
+
+  describe("JWT Token Generation", () => {
     const mockPayload = {
-      userId: 'test-user-id',
-      email: 'test@example.com',
-      role: 'PATIENT',
-      permissions: ['RECORD_READ_OWN'],
-    }
+      userId: "test-user-id",
+      email: "test@example.com",
+      role: "PATIENT",
+      permissions: ["RECORD_READ_OWN"],
+    };
 
-    test('generates access and refresh tokens', () => {
-      const tokens = generateTokens(mockPayload)
-      
-      expect(tokens).toHaveProperty('accessToken')
-      expect(tokens).toHaveProperty('refreshToken')
-      expect(tokens.accessToken).toBeDefined()
-      expect(tokens.refreshToken).toBeDefined()
-    })
+    test("generates access and refresh tokens", () => {
+      const tokens = generateTokens(mockPayload);
 
-    test('includes sessionId in tokens', () => {
-      const tokens = generateTokens(mockPayload)
-      
+      expect(tokens).toHaveProperty("accessToken");
+      expect(tokens).toHaveProperty("refreshToken");
+      expect(tokens.accessToken).toBeDefined();
+      expect(tokens.refreshToken).toBeDefined();
+    });
+
+    test("includes sessionId in tokens", () => {
+      const tokens = generateTokens(mockPayload);
+
       // Decode JWT to check payload
       const accessTokenPayload = JSON.parse(
-        Buffer.from(tokens.accessToken.split('.')[1], 'base64').toString()
-      )
-      
-      expect(accessTokenPayload).toHaveProperty('sessionId')
-      expect(accessTokenPayload.sessionId).toBeDefined()
-    })
+        Buffer.from(tokens.accessToken.split(".")[1], "base64").toString()
+      );
 
-    test('includes all required fields in access token', () => {
-      const tokens = generateTokens(mockPayload)
-      
+      expect(accessTokenPayload).toHaveProperty("sessionId");
+      expect(accessTokenPayload.sessionId).toBeDefined();
+    });
+
+    test("includes all required fields in access token", () => {
+      const tokens = generateTokens(mockPayload);
+
       const accessTokenPayload = JSON.parse(
-        Buffer.from(tokens.accessToken.split('.')[1], 'base64').toString()
-      )
-      
-      expect(accessTokenPayload.userId).toBe(mockPayload.userId)
-      expect(accessTokenPayload.email).toBe(mockPayload.email)
-      expect(accessTokenPayload.role).toBe(mockPayload.role)
-      expect(accessTokenPayload.permissions).toEqual(mockPayload.permissions)
-    })
-  })
+        Buffer.from(tokens.accessToken.split(".")[1], "base64").toString()
+      );
 
-  describe('JWT Token Verification', () => {
+      expect(accessTokenPayload.userId).toBe(mockPayload.userId);
+      expect(accessTokenPayload.email).toBe(mockPayload.email);
+      expect(accessTokenPayload.role).toBe(mockPayload.role);
+      expect(accessTokenPayload.permissions).toEqual(mockPayload.permissions);
+    });
+  });
+
+  describe("JWT Token Verification", () => {
     const mockPayload = {
-      userId: 'test-user-id',
-      email: 'test@example.com',
-      role: 'PATIENT',
-      permissions: ['RECORD_READ_OWN'],
-    }
+      userId: "test-user-id",
+      email: "test@example.com",
+      role: "PATIENT",
+      permissions: ["RECORD_READ_OWN"],
+    };
 
-    test('verifies valid access token', () => {
-      const tokens = generateTokens(mockPayload)
-      const payload = verifyAccessToken(tokens.accessToken)
-      
-      expect(payload.userId).toBe(mockPayload.userId)
-      expect(payload.email).toBe(mockPayload.email)
-      expect(payload.role).toBe(mockPayload.role)
-      expect(payload.permissions).toEqual(mockPayload.permissions)
-    })
+    test("verifies valid access token", () => {
+      const tokens = generateTokens(mockPayload);
+      const payload = verifyAccessToken(tokens.accessToken);
 
-    test('throws error for invalid token', () => {
+      expect(payload.userId).toBe(mockPayload.userId);
+      expect(payload.email).toBe(mockPayload.email);
+      expect(payload.role).toBe(mockPayload.role);
+      expect(payload.permissions).toEqual(mockPayload.permissions);
+    });
+
+    test("throws error for invalid token", () => {
       expect(() => {
-        verifyAccessToken('invalid-token')
-      }).toThrow()
-    })
+        verifyAccessToken("invalid-token");
+      }).toThrow();
+    });
 
-    test('throws error for expired token', () => {
+    test("throws error for expired token", () => {
       // Create a token with past expiration
       const expiredPayload = {
         ...mockPayload,
         exp: Math.floor(Date.now() / 1000) - 3600, // 1 hour ago
-      }
-      
+      };
+
       // This would require mocking the JWT library to test expiration
       // For now, we'll test the basic verification
       expect(() => {
-        verifyAccessToken('expired-token')
-      }).toThrow()
-    })
-  })
+        verifyAccessToken("expired-token");
+      }).toThrow();
+    });
+  });
 
-  describe('MFA Utilities', () => {
-    test('generates MFA secret', () => {
-      const secret = generateMFASecret()
-      
-      expect(secret).toBeDefined()
-      expect(secret.length).toBeGreaterThan(0)
-      expect(typeof secret).toBe('string')
-    })
+  describe("MFA Utilities", () => {
+    test("generates MFA secret", () => {
+      const secret = generateMFASecret();
 
-    test('verifies MFA code', () => {
-      const secret = generateMFASecret()
-      const code = '123456' // This would be generated by the authenticator app
-      
+      expect(secret).toBeDefined();
+      expect(secret.length).toBeGreaterThan(0);
+      expect(typeof secret).toBe("string");
+    });
+
+    test("verifies MFA code", () => {
+      const secret = generateMFASecret();
+      const code = "123456"; // This would be generated by the authenticator app
+
       // Note: This test might fail because the code changes every 30 seconds
       // In a real test environment, you'd mock the time or use a known secret
-      const isValid = verifyMFACode(secret, code)
-      
-      // The result depends on timing, so we just check it returns a boolean
-      expect(typeof isValid).toBe('boolean')
-    })
-  })
+      const isValid = verifyMFACode(secret, code);
 
-  describe('Account Lockout', () => {
+      // The result depends on timing, so we just check it returns a boolean
+      expect(typeof isValid).toBe("boolean");
+    });
+  });
+
+  describe("Account Lockout", () => {
     beforeEach(() => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         lockedUntil: null,
         failedLoginAttempts: 0,
-      })
-    })
+      });
+    });
 
-    test('allows access when account is not locked', async () => {
-      await expect(checkAccountLockout('test-user-id')).resolves.not.toThrow()
-    })
+    test("allows access when account is not locked", async () => {
+      await expect(checkAccountLockout("test-user-id")).resolves.not.toThrow();
+    });
 
-    test('throws error when account is locked', async () => {
-      const lockedUntil = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes from now
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+    test("throws error when account is locked", async () => {
+      const lockedUntil = new Date(Date.now() + 30 * 60 * 1000)(
+        // 30 minutes from now
+        prisma.user.findUnique as jest.Mock
+      ).mockResolvedValue({
         lockedUntil,
         failedLoginAttempts: 5,
-      })
+      });
 
-      await expect(checkAccountLockout('test-user-id')).rejects.toThrow('Account locked')
-    })
+      await expect(checkAccountLockout("test-user-id")).rejects.toThrow(
+        "Account locked"
+      );
+    });
 
-    test('allows access when lockout period has expired', async () => {
-      const lockedUntil = new Date(Date.now() - 30 * 60 * 1000) // 30 minutes ago
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+    test("allows access when lockout period has expired", async () => {
+      const lockedUntil = new Date(Date.now() - 30 * 60 * 1000)(
+        // 30 minutes ago
+        prisma.user.findUnique as jest.Mock
+      ).mockResolvedValue({
         lockedUntil,
         failedLoginAttempts: 5,
-      })
+      });
 
-      await expect(checkAccountLockout('test-user-id')).resolves.not.toThrow()
-    })
-  })
+      await expect(checkAccountLockout("test-user-id")).resolves.not.toThrow();
+    });
+  });
 
-  describe('Password History', () => {
+  describe("Password History", () => {
     beforeEach(() => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        passwordHistory: ['old-hash-1', 'old-hash-2'],
-      })
-    })
+        passwordHistory: ["old-hash-1", "old-hash-2"],
+      });
+    });
 
-    test('validates password against history', async () => {
-      const newPassword = 'newPassword123'
-      const oldPassword = 'oldPassword123'
-      
+    test("validates password against history", async () => {
+      const newPassword = "newPassword123";
+      const oldPassword = "oldPassword123";
+
       // Mock that the new password matches an old hash
-      const mockVerifyPassword = jest.fn()
-      mockVerifyPassword.mockResolvedValueOnce(true) // First call returns true (matches old password)
-      
+      const mockVerifyPassword = jest.fn();
+      mockVerifyPassword.mockResolvedValueOnce(true); // First call returns true (matches old password)
+
       // This test would need to mock the verifyPassword function
       // For now, we'll test the structure
-      expect(typeof validatePasswordHistory).toBe('function')
-    })
+      expect(typeof validatePasswordHistory).toBe("function");
+    });
 
-    test('updates password history', async () => {
-      const userId = 'test-user-id'
-      const newPasswordHash = 'new-hash'
-      
-      await updatePasswordHistory(userId, newPasswordHash)
-      
+    test("updates password history", async () => {
+      const userId = "test-user-id";
+      const newPasswordHash = "new-hash";
+
+      await updatePasswordHistory(userId, newPasswordHash);
+
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: userId },
         data: { passwordHistory: expect.any(Array) },
-      })
-    })
+      });
+    });
 
-    test('maintains password history limit', async () => {
-      const userId = 'test-user-id'
-      const newPasswordHash = 'new-hash'
-      
-      // Mock user with 5 passwords in history
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        passwordHistory: ['hash1', 'hash2', 'hash3', 'hash4', 'hash5'],
-        passwordHash: 'current-hash',
-      })
-      
-      await updatePasswordHistory(userId, newPasswordHash)
-      
-      const updateCall = (prisma.user.update as jest.Mock).mock.calls[0]
-      const passwordHistory = updateCall[0].data.passwordHistory
-      
-      expect(passwordHistory.length).toBeLessThanOrEqual(5)
-    })
-  })
+    test("maintains password history limit", async () => {
+      const userId = "test-user-id";
+      const newPasswordHash = "new-hash"(
+        // Mock user with 5 passwords in history
+        prisma.user.findUnique as jest.Mock
+      ).mockResolvedValue({
+        passwordHistory: ["hash1", "hash2", "hash3", "hash4", "hash5"],
+        passwordHash: "current-hash",
+      });
 
-  describe('Error Handling', () => {
-    test('handles missing environment variables gracefully', () => {
-      delete process.env.JWT_SECRET
-      
+      await updatePasswordHistory(userId, newPasswordHash);
+
+      const updateCall = (prisma.user.update as jest.Mock).mock.calls[0];
+      const passwordHistory = updateCall[0].data.passwordHistory;
+
+      expect(passwordHistory.length).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe("Error Handling", () => {
+    test("handles missing environment variables gracefully", () => {
+      delete process.env.JWT_SECRET;
+
       expect(() => {
-        generateTokens({ userId: 'test', email: 'test@test.com', role: 'PATIENT', permissions: [] })
-      }).toThrow()
-    })
+        generateTokens({
+          userId: "test",
+          email: "test@test.com",
+          role: "PATIENT",
+          permissions: [],
+        });
+      }).toThrow();
+    });
 
-    test('handles database errors gracefully', async () => {
-      (prisma.user.findUnique as jest.Mock).mockRejectedValue(new Error('Database error'))
-      
-      await expect(checkAccountLockout('test-user-id')).rejects.toThrow('Database error')
-    })
-  })
+    test("handles database errors gracefully", async () => {
+      (prisma.user.findUnique as jest.Mock).mockRejectedValue(
+        new Error("Database error")
+      );
 
-  describe('Performance', () => {
-    test('password hashing completes within reasonable time', async () => {
-      const start = performance.now()
-      await hashPassword('testPassword123')
-      const end = performance.now()
-      
-      expect(end - start).toBeLessThan(1000) // Should complete in less than 1 second
-    })
+      await expect(checkAccountLockout("test-user-id")).rejects.toThrow(
+        "Database error"
+      );
+    });
+  });
 
-    test('token generation completes quickly', () => {
+  describe("Performance", () => {
+    test("password hashing completes within reasonable time", async () => {
+      const start = performance.now();
+      await hashPassword("testPassword123");
+      const end = performance.now();
+
+      expect(end - start).toBeLessThan(1000); // Should complete in less than 1 second
+    });
+
+    test("token generation completes quickly", () => {
       const mockPayload = {
-        userId: 'test-user-id',
-        email: 'test@example.com',
-        role: 'PATIENT',
-        permissions: ['RECORD_READ_OWN'],
-      }
-      
-      const start = performance.now()
-      generateTokens(mockPayload)
-      const end = performance.now()
-      
-      expect(end - start).toBeLessThan(100) // Should complete in less than 100ms
-    })
-  })
-})
+        userId: "test-user-id",
+        email: "test@example.com",
+        role: "PATIENT",
+        permissions: ["RECORD_READ_OWN"],
+      };
+
+      const start = performance.now();
+      generateTokens(mockPayload);
+      const end = performance.now();
+
+      expect(end - start).toBeLessThan(100); // Should complete in less than 100ms
+    });
+  });
+});
