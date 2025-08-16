@@ -56,7 +56,24 @@ function getClientIdentifier(request: NextRequest): string {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware for non-API routes
+  // Handle dashboard route protection - TEMPORARILY DISABLED FOR TESTING
+  /*
+  if (pathname.startsWith("/dashboard")) {
+    // Check for authentication token in cookies or headers
+    const authToken =
+      request.cookies.get("auth_tokens")?.value ||
+      request.headers.get("authorization")?.replace("Bearer ", "");
+
+    if (!authToken) {
+      // Redirect to login if no token found
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+  */
+
+  // Skip middleware for non-API routes (except dashboard)
   if (!pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
@@ -110,5 +127,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/api/:path*", "/dashboard/:path*"],
 };

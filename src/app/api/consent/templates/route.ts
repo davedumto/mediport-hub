@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GDPR_CONSENT_TEMPLATES } from "../../../../utils/constants";
-import { logger } from "@/lib/logger";
+import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {

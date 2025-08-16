@@ -6,7 +6,7 @@ import {
   Consultation,
   Appointment,
 } from "../services/decryptionService";
-import { logger } from "../utils/logger";
+import logger from "../lib/logger";
 
 export function usePIIDecryption<
   T extends Patient | MedicalRecord | Consultation | Appointment | null

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "../../../../lib/db";
 import { AuditService, AuditAction } from "../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
-import { logger } from "../../../../lib/logger";
+import logger from "../../../../lib/logger";
 
 export async function GET(
   request: NextRequest,

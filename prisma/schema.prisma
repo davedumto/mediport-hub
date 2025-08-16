@@ -42,6 +42,8 @@ model User {
   systemSettings       SystemSetting[]
   userRoles            UserRoleAssignment[]
   userSessions         UserSession[]
+  feedback             Feedback[]
+  verificationCodes    VerificationCode[]
 
   @@map("users")
 }
@@ -246,6 +248,19 @@ model PasswordReset {
   @@map("password_resets")
 }
 
+model VerificationCode {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  type      VerificationCodeType
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verification_codes")
+}
+
 model Role {
   id           String               @id @default(uuid())
   name         String               @unique
@@ -284,6 +299,24 @@ model SystemSetting {
   updatedByUser User?    @relation(fields: [updatedBy], references: [id])
 
   @@map("system_settings")
+}
+
+model Feedback {
+  id          String           @id @default(uuid())
+  userId      String
+  type        FeedbackType
+  title       String
+  description String
+  priority    FeedbackPriority @default(MEDIUM)
+  category    FeedbackCategory @default(GENERAL)
+  status      FeedbackStatus   @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  user        User             @relation(fields: [userId], references: [id])
+
+  @@map("feedback")
 }
 
 enum UserRole {
@@ -385,4 +418,45 @@ enum VerificationStatus {
   PENDING_VERIFICATION
   VERIFIED
   REJECTED
+}
+
+enum FeedbackType {
+  FEATURE_REQUEST
+  BUG_REPORT
+  IMPROVEMENT
+  COMPLAINT
+  COMPLIMENT
+  GENERAL
+}
+
+enum FeedbackPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum FeedbackCategory {
+  USER_INTERFACE
+  FUNCTIONALITY
+  PERFORMANCE
+  SECURITY
+  ACCESSIBILITY
+  DOCUMENTATION
+  GENERAL
+}
+
+enum FeedbackStatus {
+  PENDING
+  IN_REVIEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum VerificationCodeType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  PHONE_VERIFICATION
+  TWO_FACTOR_AUTH
 }

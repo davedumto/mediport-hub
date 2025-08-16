@@ -3,7 +3,7 @@ import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import crypto from "crypto";
-import { logger } from "../../../../lib/logger";
+import logger from "../../../../lib/logger";
 
 export async function POST(request: NextRequest) {
   try {

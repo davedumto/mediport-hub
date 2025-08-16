@@ -6,6 +6,7 @@ import prisma from "./db";
 import { AppError, ErrorCodes } from "../utils/errors";
 import { JWT_ACCESS_TOKEN_EXPIRY } from "../utils/constants";
 import logger from "./logger";
+import { NextRequest } from "next/server";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
@@ -70,6 +71,45 @@ export function verifyAccessToken(token: string): JWTPayload {
       "Invalid or expired access token",
       401
     );
+  }
+}
+
+// JWT token verification from request object (for API routes)
+export async function verifyAccessTokenFromRequest(
+  request: NextRequest
+): Promise<{
+  success: boolean;
+  user: JWTPayload;
+  message?: string;
+}> {
+  try {
+    const authHeader = request.headers.get("authorization");
+    const accessToken = authHeader?.replace("Bearer ", "");
+
+    if (!accessToken) {
+      return {
+        success: false,
+        user: {} as JWTPayload,
+        message: "Access token required",
+      };
+    }
+
+    // Verify token
+    const payload = verifyAccessToken(accessToken);
+
+    return {
+      success: true,
+      user: payload,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      user: {} as JWTPayload,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Invalid or expired access token",
+    };
   }
 }
 
