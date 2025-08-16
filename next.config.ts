@@ -5,21 +5,17 @@ const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client"],
   },
-  // Disable turbopack in production for better compatibility
-  ...(process.env.NODE_ENV === "production" && {
-    turbopack: false,
-  }),
-  // Enable turbopack only in development
-  ...(process.env.NODE_ENV === "development" && {
-    turbopack: {
-      rules: {
-        "*.svg": {
-          loaders: ["@svgr/webpack"],
-          as: "*.js",
-        },
+  // Disable turbopack completely for better production compatibility
+  turbopack: false,
+  // Ensure proper API route handling
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
       },
-    },
-  }),
+    ];
+  },
 };
 
 export default nextConfig;

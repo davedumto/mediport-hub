@@ -78,6 +78,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Skip middleware for auth routes to prevent interference
+  if (pathname.startsWith("/api/auth/")) {
+    return NextResponse.next();
+  }
+
   const rateLimitConfig = getRateLimitConfig(pathname);
   const identifier = getClientIdentifier(request);
 
