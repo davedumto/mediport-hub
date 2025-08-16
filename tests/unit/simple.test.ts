@@ -36,3 +36,4 @@ describe("Simple Test Suite", () => {
     expect(user.role).toBe("PATIENT");
   });
 });
+
