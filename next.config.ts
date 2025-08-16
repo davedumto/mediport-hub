@@ -7,15 +7,6 @@ const nextConfig: NextConfig = {
   },
   // Disable turbopack completely for better production compatibility
   turbopack: false,
-  // Ensure proper API route handling
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: '/api/:path*',
-      },
-    ];
-  },
 };
 
 export default nextConfig;
