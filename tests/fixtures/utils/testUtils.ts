@@ -1,4 +1,4 @@
-import { render, RenderOptions } from '@testing-library/react'
+import { render, RenderOptions, screen, fireEvent } from '@testing-library/react'
 import { ReactElement } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ToastProvider } from '@/contexts/ToastContext'

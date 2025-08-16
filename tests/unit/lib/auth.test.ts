@@ -189,10 +189,8 @@ describe("Authentication Utilities", () => {
     });
 
     test("throws error when account is locked", async () => {
-      const lockedUntil = new Date(Date.now() + 30 * 60 * 1000)(
-        // 30 minutes from now
-        prisma.user.findUnique as jest.Mock
-      ).mockResolvedValue({
+      const lockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         lockedUntil,
         failedLoginAttempts: 5,
       });
@@ -203,10 +201,8 @@ describe("Authentication Utilities", () => {
     });
 
     test("allows access when lockout period has expired", async () => {
-      const lockedUntil = new Date(Date.now() - 30 * 60 * 1000)(
-        // 30 minutes ago
-        prisma.user.findUnique as jest.Mock
-      ).mockResolvedValue({
+      const lockedUntil = new Date(Date.now() - 30 * 60 * 1000); // 30 minutes ago
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         lockedUntil,
         failedLoginAttempts: 5,
       });
@@ -249,10 +245,10 @@ describe("Authentication Utilities", () => {
 
     test("maintains password history limit", async () => {
       const userId = "test-user-id";
-      const newPasswordHash = "new-hash"(
-        // Mock user with 5 passwords in history
-        prisma.user.findUnique as jest.Mock
-      ).mockResolvedValue({
+      const newPasswordHash = "new-hash";
+      
+      // Mock user with 5 passwords in history
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         passwordHistory: ["hash1", "hash2", "hash3", "hash4", "hash5"],
         passwordHash: "current-hash",
       });
