@@ -40,7 +40,9 @@ describe("Button Component", () => {
     });
 
     test("renders button with different sizes", () => {
-      const { rerender } = render(<Button {...defaultProps} className="h-10 px-4 py-2" />);
+      const { rerender } = render(
+        <Button {...defaultProps} className="h-10 px-4 py-2" />
+      );
       expect(screen.getByRole("button")).toHaveClass("h-10 px-4 py-2");
 
       rerender(<Button {...defaultProps} className="h-9 px-3" />);

@@ -1,118 +1,154 @@
 import crypto from "crypto";
 
-const ALGORITHM = "aes-256-gcm";
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY!, "hex"); // 32-byte key
+export class EncryptionService {
+  private static algorithm = "aes-256-gcm";
+  private static keyLength = 32; // 256 bits
+  private static ivLength = 16; // 128 bits
+  private static tagLength = 16; // 128 bits
 
-export interface EncryptedData {
-  encrypted: string;
-  iv: string;
-  tag: string;
-}
-
-// Modern encryption using createCipheriv
-export function encrypt(plaintext: string): EncryptedData {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
-  cipher.setAAD(Buffer.from("ehr-system", "utf8"));
-
-  let encrypted = cipher.update(plaintext, "utf8", "hex");
-  encrypted += cipher.final("hex");
-
-  const tag = cipher.getAuthTag();
-
-  return {
-    encrypted,
-    iv: iv.toString("hex"),
-    tag: tag.toString("hex"),
-  };
-}
-
-// Modern decryption using createDecipheriv
-export function decrypt(encryptedData: EncryptedData): string {
-  const decipher = crypto.createDecipheriv(
-    ALGORITHM,
-    KEY,
-    Buffer.from(encryptedData.iv, "hex")
-  );
-  decipher.setAAD(Buffer.from("ehr-system", "utf8"));
-  decipher.setAuthTag(Buffer.from(encryptedData.tag, "hex"));
-
-  let decrypted = decipher.update(encryptedData.encrypted, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-
-  return decrypted;
-}
-
-// Encrypt a field and return JSON string for database storage
-export async function encryptField(
-  plaintext: string | null | undefined
-): Promise<string | null> {
-  if (!plaintext) return null;
-
-  try {
-    const encrypted = encrypt(plaintext);
-    return JSON.stringify(encrypted);
-  } catch (error) {
-    console.error("Encryption error:", error);
-    throw new Error("Failed to encrypt field");
-  }
-}
-
-// Decrypt a field from JSON string stored in database
-export async function decryptField(
-  encryptedJson: string | null | undefined
-): Promise<string | null> {
-  if (!encryptedJson) return null;
-
-  try {
-    const encryptedData: EncryptedData = JSON.parse(encryptedJson);
-    return decrypt(encryptedData);
-  } catch (error) {
-    console.error("Decryption error:", error);
-    return null; // Return null instead of throwing to handle corrupted data gracefully
-  }
-}
-
-// Encrypt multiple fields at once
-export async function encryptFields(
-  fields: Record<string, string | null | undefined>
-): Promise<Record<string, string | null>> {
-  const encryptedFields: Record<string, string | null> = {};
-
-  for (const [key, value] of Object.entries(fields)) {
-    encryptedFields[key] = await encryptField(value);
+  /**
+   * Generate a secure encryption key
+   */
+  static generateKey(): string {
+    return crypto.randomBytes(this.keyLength).toString("hex");
   }
 
-  return encryptedFields;
-}
-
-// Decrypt multiple fields at once
-export async function decryptFields(
-  encryptedFields: Record<string, string | null | undefined>
-): Promise<Record<string, string | null>> {
-  const decryptedFields: Record<string, string | null> = {};
-
-  for (const [key, value] of Object.entries(encryptedFields)) {
-    decryptedFields[key] = await decryptField(value);
+  /**
+   * Generate a secure initialization vector
+   */
+  static generateIV(): string {
+    return crypto.randomBytes(this.ivLength).toString("hex");
   }
 
-  return decryptedFields;
-}
+  /**
+   * Encrypt sensitive data
+   */
+  static encrypt(
+    data: string,
+    key: string
+  ): { encryptedData: string; iv: string; tag: string } {
+    try {
+      // Convert hex key to buffer
+      const keyBuffer = Buffer.from(key, "hex");
 
-// Check if a field is encrypted
-export function isEncrypted(data: string | null | undefined): boolean {
-  if (!data) return false;
+      // Generate IV
+      const iv = crypto.randomBytes(this.ivLength);
 
-  try {
-    const parsed = JSON.parse(data);
-    return (
-      parsed &&
-      typeof parsed === "object" &&
-      "encrypted" in parsed &&
-      "iv" in parsed &&
-      "tag" in parsed
+      // Create cipher
+      const cipher = crypto.createCipher(this.algorithm, keyBuffer);
+      cipher.setAAD(Buffer.from("mediport-pii", "utf8")); // Additional authenticated data
+
+      // Encrypt data
+      let encrypted = cipher.update(data, "utf8", "hex");
+      encrypted += cipher.final("hex");
+
+      // Get authentication tag
+      const tag = cipher.getAuthTag();
+
+      return {
+        encryptedData: encrypted,
+        iv: iv.toString("hex"),
+        tag: tag.toString("hex"),
+      };
+    } catch (error) {
+      throw new Error(
+        `Encryption failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
+  /**
+   * Decrypt sensitive data
+   */
+  static decrypt(
+    encryptedData: string,
+    key: string,
+    iv: string,
+    tag: string
+  ): string {
+    try {
+      // Convert hex values to buffers
+      const keyBuffer = Buffer.from(key, "hex");
+      const ivBuffer = Buffer.from(iv, "hex");
+      const tagBuffer = Buffer.from(tag, "hex");
+
+      // Create decipher
+      const decipher = crypto.createDecipher(this.algorithm, keyBuffer);
+      decipher.setAAD(Buffer.from("mediport-pii", "utf8"));
+      decipher.setAuthTag(tagBuffer);
+
+      // Decrypt data
+      let decrypted = decipher.update(encryptedData, "hex", "utf8");
+      decrypted += decipher.final("utf8");
+
+      return decrypted;
+    } catch (error) {
+      throw new Error(
+        `Decryption failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
+  /**
+   * Hash sensitive data (one-way, cannot be reversed)
+   */
+  static hash(data: string, salt?: string): { hash: string; salt: string } {
+    const generatedSalt = salt || crypto.randomBytes(16).toString("hex");
+    const hash = crypto
+      .pbkdf2Sync(data, generatedSalt, 10000, 64, "sha512")
+      .toString("hex");
+
+    return { hash, salt: generatedSalt };
+  }
+
+  /**
+   * Verify hashed data
+   */
+  static verifyHash(data: string, hash: string, salt: string): boolean {
+    const { hash: computedHash } = this.hash(data, salt);
+    return crypto.timingSafeEqual(
+      Buffer.from(hash, "hex"),
+      Buffer.from(computedHash, "hex")
     );
-  } catch {
-    return false;
+  }
+
+  /**
+   * Generate a secure random string
+   */
+  static generateSecureString(length: number = 32): string {
+    return crypto.randomBytes(length).toString("hex");
+  }
+
+  /**
+   * Mask PII data for display/logging
+   */
+  static maskPII(
+    data: string,
+    type: "email" | "name" | "phone" | "license"
+  ): string {
+    switch (type) {
+      case "email":
+        return data.replace(/(.{2}).*@(.+)/, "$1***@$2");
+      case "name":
+        return (
+          data.charAt(0) +
+          "*".repeat(Math.max(0, data.length - 2)) +
+          data.charAt(data.length - 1)
+        );
+      case "phone":
+        return data.replace(/(\d{3})\d{3}(\d{4})/, "$1-***-$2");
+      case "license":
+        return (
+          data.charAt(0) +
+          "*".repeat(Math.max(0, data.length - 2)) +
+          data.charAt(data.length - 1)
+        );
+      default:
+        return "*".repeat(data.length);
+    }
   }
 }

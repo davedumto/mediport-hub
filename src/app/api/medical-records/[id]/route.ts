@@ -8,7 +8,8 @@ import { hasPermission } from "../../../../lib/permissions";
 import { Permission } from "../../../../types/auth";
 import { updateMedicalRecordSchema } from "../../../../lib/validation";
 import { SanitizationService } from "../../../../services/sanitizationService";
-import { encryptField, decryptField } from "../../../../lib/encryption";
+import { PIIProtectionService } from "../../../../services/piiProtectionService";
+import crypto from "crypto";
 
 export async function GET(
   request: NextRequest,
@@ -170,7 +171,7 @@ export async function GET(
 
     if (medicalRecord.descriptionEncrypted) {
       try {
-        decryptedDescription = await decryptField(
+        decryptedDescription = await PIIProtectionService.decryptField(
           Buffer.from(medicalRecord.descriptionEncrypted).toString("utf-8")
         );
       } catch (error) {
@@ -181,7 +182,7 @@ export async function GET(
 
     if (medicalRecord.findingsEncrypted) {
       try {
-        decryptedFindings = await decryptField(
+        decryptedFindings = await PIIProtectionService.decryptField(
           Buffer.from(medicalRecord.findingsEncrypted).toString("utf-8")
         );
       } catch (error) {
@@ -192,7 +193,7 @@ export async function GET(
 
     if (medicalRecord.recommendationsEncrypted) {
       try {
-        decryptedRecommendations = await decryptField(
+        decryptedRecommendations = await PIIProtectionService.decryptField(
           Buffer.from(medicalRecord.recommendationsEncrypted).toString("utf-8")
         );
       } catch (error) {
@@ -411,19 +412,19 @@ export async function PUT(
     // Encrypt sensitive fields if provided
     if (sanitizedData.description !== undefined) {
       updateData.descriptionEncrypted = sanitizedData.description
-        ? await encryptField(sanitizedData.description)
+        ? await PIIProtectionService.encryptField(sanitizedData.description)
         : null;
     }
 
     if (sanitizedData.findings !== undefined) {
       updateData.findingsEncrypted = sanitizedData.findings
-        ? await encryptField(sanitizedData.findings)
+        ? await PIIProtectionService.encryptField(sanitizedData.findings)
         : null;
     }
 
     if (sanitizedData.recommendations !== undefined) {
       updateData.recommendationsEncrypted = sanitizedData.recommendations
-        ? await encryptField(sanitizedData.recommendations)
+        ? await PIIProtectionService.encryptField(sanitizedData.recommendations)
         : null;
     }
 

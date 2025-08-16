@@ -9,7 +9,8 @@ import { hasPermission } from "../../../lib/permissions";
 import { Permission } from "../../../types/auth";
 import { createConsultationSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
-import { encryptField } from "../../../lib/encryption";
+import { PIIProtectionService } from "../../../services/piiProtectionService";
+import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   try {
@@ -251,7 +252,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Extract and verify JWT token
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
+    // Verify access token
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json(
@@ -456,26 +471,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt sensitive fields
-    const encryptedData = {
-      ...sanitizedData,
-      chiefComplaintEncrypted: sanitizedData.chiefComplaint
-        ? await encryptField(sanitizedData.chiefComplaint)
+    const encryptedFields = {
+      chiefComplaint: sanitizedData.chiefComplaint
+        ? PIIProtectionService.encryptField(sanitizedData.chiefComplaint)
         : null,
-      symptomsEncrypted: sanitizedData.symptoms
-        ? await encryptField(sanitizedData.symptoms)
+      symptoms: sanitizedData.symptoms
+        ? PIIProtectionService.encryptField(sanitizedData.symptoms)
         : null,
-      diagnosisEncrypted: sanitizedData.diagnosis
-        ? await encryptField(sanitizedData.diagnosis)
+      diagnosis: sanitizedData.diagnosis
+        ? PIIProtectionService.encryptField(sanitizedData.diagnosis)
         : null,
-      treatmentPlanEncrypted: sanitizedData.treatmentPlan
-        ? await encryptField(sanitizedData.treatmentPlan)
+      treatmentPlan: sanitizedData.treatmentPlan
+        ? PIIProtectionService.encryptField(sanitizedData.treatmentPlan)
         : null,
-      followUpInstructionsEncrypted: sanitizedData.followUpInstructions
-        ? await encryptField(sanitizedData.followUpInstructions)
+      followUpInstructions: sanitizedData.followUpInstructions
+        ? PIIProtectionService.encryptField(sanitizedData.followUpInstructions)
         : null,
     };
 
-    // Create consultation
+    // Create consultation with encrypted data
     const consultation = await prisma.consultation.create({
       data: {
         appointmentId: validatedData.appointmentId,
@@ -485,26 +499,25 @@ export async function POST(request: NextRequest) {
         startTime: validatedData.startTime,
         endTime: validatedData.endTime,
         durationMinutes,
-        chiefComplaintEncrypted: encryptedData.chiefComplaintEncrypted
-          ? Buffer.from(encryptedData.chiefComplaintEncrypted, "utf-8")
+        chiefComplaintEncrypted: encryptedFields.chiefComplaint
+          ? Buffer.from(JSON.stringify(encryptedFields.chiefComplaint), 'utf8')
           : null,
-        symptomsEncrypted: encryptedData.symptomsEncrypted
-          ? Buffer.from(encryptedData.symptomsEncrypted, "utf-8")
+        symptomsEncrypted: encryptedFields.symptoms
+          ? Buffer.from(JSON.stringify(encryptedFields.symptoms), 'utf8')
           : null,
-        diagnosisEncrypted: encryptedData.diagnosisEncrypted
-          ? Buffer.from(encryptedData.diagnosisEncrypted, "utf-8")
+        diagnosisEncrypted: encryptedFields.diagnosis
+          ? Buffer.from(JSON.stringify(encryptedFields.diagnosis), 'utf8')
           : null,
-        treatmentPlanEncrypted: encryptedData.treatmentPlanEncrypted
-          ? Buffer.from(encryptedData.treatmentPlanEncrypted, "utf-8")
+        treatmentPlanEncrypted: encryptedFields.treatmentPlan
+          ? Buffer.from(JSON.stringify(encryptedFields.treatmentPlan), 'utf8')
           : null,
         vitalSigns: validatedData.vitalSigns || {},
         prescriptions: validatedData.prescriptions || [],
         followUpRequired: validatedData.followUpRequired || false,
         followUpDate: validatedData.followUpDate,
-        followUpInstructionsEncrypted:
-          encryptedData.followUpInstructionsEncrypted
-            ? Buffer.from(encryptedData.followUpInstructionsEncrypted, "utf-8")
-            : null,
+        followUpInstructionsEncrypted: encryptedFields.followUpInstructions
+          ? Buffer.from(JSON.stringify(encryptedFields.followUpInstructions), 'utf8')
+          : null,
         billingCodes: validatedData.billingCodes || [],
         createdBy: payload.userId,
         updatedBy: payload.userId,

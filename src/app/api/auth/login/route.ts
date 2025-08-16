@@ -11,10 +11,25 @@ import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import { getRolePermissions } from "../../../../lib/permissions";
+import { PIIProtectionService } from "../../../../services/piiProtectionService";
 
 // Ensure this route is properly exported for Vercel
 export async function POST(request: NextRequest) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     // Parse request body
     const body = await request.json();
     const { email, password, mfaCode, rememberMe } = body;
@@ -34,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Extract request info for audit
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Fetch user with roles
+    // Fetch user with roles and encrypted fields
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -104,7 +119,7 @@ export async function POST(request: NextRequest) {
         data: {
           failedLoginAttempts: failedAttempts,
           lockedUntil: shouldLock
-            ? new Date(Date.now() + 30 * 60 * 1000)
+            ? new Date(Date.now() + 30 * 60 * 60 * 1000) // 30 minutes
             : null,
         },
       });
@@ -211,10 +226,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Log successful login
+    // Log successful login with safe PII data
     await AuditService.logLoginSuccess(
       user.id,
-      user.email,
+      PIIProtectionService.prepareUserDataForResponse({ email: user.email }, true).email,
       user.role,
       session.id,
       requestInfo,
@@ -233,15 +248,19 @@ export async function POST(request: NextRequest) {
       path: "/",
     };
 
+    // Prepare safe user data for response
+    const safeUserData = PIIProtectionService.prepareUserDataForResponse(user, false);
+
     const response = NextResponse.json(
       {
         message: "Login successful.",
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         user: {
-          id: user.id,
-          role: user.role, // Return the exact role value, not lowercase
-          status: user.isActive ? "active" : "inactive",
+          id: safeUserData.id,
+          role: safeUserData.role, // Return the exact role value, not lowercase
+          status: safeUserData.isActive ? "active" : "inactive",
+          // No PII data returned for security
         },
       },
       { status: 200 }

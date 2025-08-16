@@ -14,8 +14,18 @@ model User {
   passwordHash         String
   firstName            String
   lastName             String
-  role                 UserRole             @default(PATIENT)
+  // Encrypted PII fields
+  firstNameEncrypted   Bytes?
+  lastNameEncrypted    Bytes?
+  emailEncrypted       Bytes?
+  phoneEncrypted       Bytes?
+  specialtyEncrypted   Bytes?
+  medicalLicenseNumberEncrypted Bytes?
+  // Original fields kept for backward compatibility during migration
   phone                String?
+  specialty            String?
+  medicalLicenseNumber String?
+  role                 UserRole             @default(PATIENT)
   dateOfBirth          DateTime?
   isActive             Boolean              @default(true)
   emailVerified        Boolean              @default(false)
@@ -30,8 +40,6 @@ model User {
   createdBy            String?
   updatedBy            String?
   verificationStatus   VerificationStatus   @default(PENDING_VERIFICATION)
-  medicalLicenseNumber String?
-  specialty            String?
   appointments         Appointment[]
   auditLogs            AuditLog[]
   consentRecords       ConsentRecord[]

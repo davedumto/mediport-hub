@@ -246,7 +246,7 @@ describe("Authentication Utilities", () => {
     test("maintains password history limit", async () => {
       const userId = "test-user-id";
       const newPasswordHash = "new-hash";
-      
+
       // Mock user with 5 passwords in history
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         passwordHistory: ["hash1", "hash2", "hash3", "hash4", "hash5"],
