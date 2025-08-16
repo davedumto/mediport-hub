@@ -4,6 +4,7 @@ import { AuditService, AuditAction } from "../../../../lib/audit";
 import prisma from "../../../../lib/db";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import logger from "../../../../lib/logger";
+import { getRolePermissions } from "../../../../lib/permissions";
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,9 +80,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate new tokens
-    const permissions = session.user.userRoles.flatMap(
-      (ur) => ur.role.permissions as string[]
-    );
+    // Get permissions based on user role using our permission system
+    const permissions = getRolePermissions(session.user.role);
     const tokens = generateTokens({
       userId: session.user.id,
       email: session.user.email,
