@@ -2,11 +2,11 @@ import { UserRole } from "@prisma/client";
 
 // Healthcare Roles Definition
 export enum Role {
-  SUPER_ADMIN = "Super Admin", // Full system access
-  ADMIN = "Admin", // User management, system config
-  DOCTOR = "Doctor", // Full patient records access
-  NURSE = "Nurse", // Limited patient access (assigned only)
-  PATIENT = "Patient", // Own records only
+  SUPER_ADMIN = "SUPER_ADMIN", // Full system access
+  ADMIN = "ADMIN", // User management, system config
+  DOCTOR = "DOCTOR", // Full patient records access
+  NURSE = "NURSE", // Limited patient access (assigned only)
+  PATIENT = "PATIENT", // Own records only
 }
 
 // Permission system with granular control
@@ -55,6 +55,13 @@ export enum Permission {
   GDPR_EXPORT = "gdpr:export",
   GDPR_DELETE = "gdpr:delete",
   GDPR_CONSENT_MANAGE = "gdpr:consent:manage",
+
+  // System Reviews
+  REVIEW_CREATE = "review:create",
+  REVIEW_READ_ALL = "review:read:all",
+
+  // Wildcard permission (for super admins)
+  ALL_PERMISSIONS = "*",
 }
 
 // Authentication types

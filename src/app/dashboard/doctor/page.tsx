@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
 import DashboardStatsSection from "@/components/pages/dashboard/DashboardStats";
 import CalendarSection from "@/components/pages/dashboard/CalendarSection";
+import FeedbackSection from "@/components/pages/dashboard/doctor/FeedbackSection";
 import RouteGuard from "@/components/common/RouteGuard";
 
 const DoctorDashboard = () => {
@@ -203,6 +204,9 @@ const DoctorDashboard = () => {
           weeks={weeks}
           isLoading={isLoadingAppointments}
         />
+
+        {/* Feedback Section */}
+        <FeedbackSection />
       </div>
 
       {/* Logout Confirmation Dialog */}

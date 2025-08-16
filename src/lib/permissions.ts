@@ -31,6 +31,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.GDPR_EXPORT,
     Permission.GDPR_DELETE,
     Permission.GDPR_CONSENT_MANAGE,
+    Permission.REVIEW_CREATE,
+    Permission.REVIEW_READ_ALL,
   ],
 
   [Role.ADMIN]: [
@@ -56,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.APPOINTMENT_CREATE,
     Permission.APPOINTMENT_READ_ALL,
     Permission.APPOINTMENT_UPDATE,
+    Permission.REVIEW_CREATE,
   ],
 
   [Role.NURSE]: [
@@ -77,27 +80,44 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.APPOINTMENT_READ_OWN,
     Permission.GDPR_EXPORT,
     Permission.GDPR_DELETE,
+    Permission.REVIEW_CREATE,
   ],
 };
 
 // Get permissions for a role
-export function getRolePermissions(role: Role): Permission[] {
-  return ROLE_PERMISSIONS[role] || [];
+export function getRolePermissions(role: Role | string): Permission[] {
+  // Handle both our Role enum and Prisma UserRole enum
+  const roleKey = role as Role;
+  return ROLE_PERMISSIONS[roleKey] || [];
 }
 
 // Check if user has specific permission
 export function hasPermission(
-  userPermissions: Permission[],
+  userPermissions: (Permission | string)[],
   requiredPermission: Permission
 ): boolean {
+  // Check for wildcard permission
+  if (
+    userPermissions.includes(Permission.ALL_PERMISSIONS) ||
+    userPermissions.includes("*")
+  ) {
+    return true;
+  }
   return userPermissions.includes(requiredPermission);
 }
 
 // Check if user has any of the required permissions
 export function hasAnyPermission(
-  userPermissions: Permission[],
+  userPermissions: (Permission | string)[],
   requiredPermissions: Permission[]
 ): boolean {
+  // Check for wildcard permission
+  if (
+    userPermissions.includes(Permission.ALL_PERMISSIONS) ||
+    userPermissions.includes("*")
+  ) {
+    return true;
+  }
   return requiredPermissions.some((permission) =>
     userPermissions.includes(permission)
   );
@@ -105,9 +125,16 @@ export function hasAnyPermission(
 
 // Check if user has all required permissions
 export function hasAllPermissions(
-  userPermissions: Permission[],
+  userPermissions: (Permission | string)[],
   requiredPermissions: Permission[]
 ): boolean {
+  // Check for wildcard permission
+  if (
+    userPermissions.includes(Permission.ALL_PERMISSIONS) ||
+    userPermissions.includes("*")
+  ) {
+    return true;
+  }
   return requiredPermissions.every((permission) =>
     userPermissions.includes(permission)
   );

@@ -83,7 +83,7 @@ export class DecryptionService {
       const iv = Buffer.from(encryptedData.iv, "hex");
       const tag = Buffer.from(encryptedData.tag, "hex");
 
-      // Get encryption key from environment (must match backend)
+      // Get encryption key from backend endpoint (secure way)
       const key = await this.getEncryptionKey();
 
       // Decrypt using Web Crypto API
@@ -106,23 +106,55 @@ export class DecryptionService {
   }
 
   /**
-   * Get encryption key from environment
-   * Note: In production, this should be securely managed
+   * Get encryption key from backend endpoint (secure way)
    */
   private static async getEncryptionKey(): Promise<CryptoKey> {
-    const keyMaterial = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-    if (!keyMaterial) {
-      throw new Error("Encryption key not configured");
-    }
+    try {
+      // Get the current auth token from localStorage or context
+      const authTokens = localStorage.getItem("auth_tokens");
+      if (!authTokens) {
+        throw new Error("No authentication tokens available");
+      }
 
-    const keyBuffer = Buffer.from(keyMaterial, "hex");
-    return await crypto.subtle.importKey(
-      "raw",
-      keyBuffer,
-      { name: this.ALGORITHM },
-      false,
-      ["decrypt"]
-    );
+      const tokens = JSON.parse(authTokens);
+      const accessToken = tokens.accessToken;
+
+      if (!accessToken) {
+        throw new Error("No access token available");
+      }
+
+      // Call backend to get the encryption key securely
+      const response = await fetch("/api/encryption/key", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get encryption key");
+      }
+
+      const result = await response.json();
+      const keyMaterial = result.key;
+
+      if (!keyMaterial) {
+        throw new Error("Encryption key not configured");
+      }
+
+      const keyBuffer = Buffer.from(keyMaterial, "hex");
+      return await crypto.subtle.importKey(
+        "raw",
+        keyBuffer,
+        { name: this.ALGORITHM },
+        false,
+        ["decrypt"]
+      );
+    } catch (error) {
+      logger.error("Failed to get encryption key:", error);
+      throw new Error("Encryption key not available");
+    }
   }
 
   /**

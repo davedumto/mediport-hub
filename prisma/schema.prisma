@@ -4,7 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("POSTGRES_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model User {
@@ -43,6 +44,7 @@ model User {
   userRoles            UserRoleAssignment[]
   userSessions         UserSession[]
   feedback             Feedback[]
+  systemReviews        SystemReview[]
   verificationCodes    VerificationCode[]
 
   @@map("users")
@@ -317,6 +319,20 @@ model Feedback {
   user        User             @relation(fields: [userId], references: [id])
 
   @@map("feedback")
+}
+
+model SystemReview {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  title     String   // Review title
+  message   String   // Review content/feedback
+  rating    Int      // 1-5 star rating
+  
+  createdAt DateTime @default(now())
+  
+  @@map("system_reviews")
 }
 
 enum UserRole {

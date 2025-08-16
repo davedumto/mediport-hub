@@ -10,6 +10,7 @@ import { AppError, ErrorCodes } from "../../../../utils/errors";
 import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { getRolePermissions } from "../../../../lib/permissions";
 
 export async function POST(request: NextRequest) {
   try {
@@ -180,8 +181,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate tokens
-    const permissions =
-      user.userRoles?.flatMap((ur) => ur.role.permissions as string[]) || [];
+    // Get permissions based on user role using our permission system
+    const permissions = getRolePermissions(user.role);
     const tokens = generateTokens({
       userId: user.id,
       email: user.email,
