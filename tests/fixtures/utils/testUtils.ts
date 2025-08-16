@@ -176,3 +176,4 @@ export { measurePerformance }
 export { createTestDatabase }
 export { mockFetch }
 export { generateMockUser, generateMockPatient, generateMockMedicalRecord, generateMockAppointment, generateMockJWT }
+
