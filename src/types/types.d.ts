@@ -15,6 +15,16 @@ interface Appointment {
   updatedAt?: string;
 }
 
+interface MedicalReportFormData {
+  patientId: string;
+  visitDate: string;
+  reportTitle: string;
+  primaryDiagnosis: string;
+  reportDetails: string;
+  attachedFiles: FileList | null;
+}
 
-
-
+interface Patient {
+  id: string;
+  name: string;
+}
