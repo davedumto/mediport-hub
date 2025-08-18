@@ -19,10 +19,27 @@ export class PIIDecryptionService {
     try {
       const decryptedData: DecryptedUserData = {};
 
+      // Helper function to parse encrypted data
+      const parseEncryptedData = (encryptedField: any) => {
+        if (Buffer.isBuffer(encryptedField)) {
+          const bufferString = Buffer.from(encryptedField).toString('utf8');
+          return JSON.parse(bufferString);
+        } else if (typeof encryptedField === 'string') {
+          return JSON.parse(encryptedField);
+        } else if (encryptedField instanceof Uint8Array) {
+          // Handle Uint8Array from database - convert to proper buffer first
+          const buffer = Buffer.from(encryptedField);
+          const bufferString = buffer.toString('utf8');
+          return JSON.parse(bufferString);
+        } else {
+          return encryptedField;
+        }
+      };
+
       // Decrypt firstName if available
       if (user.firstNameEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.firstNameEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.firstNameEncrypted);
           decryptedData.firstName = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -34,10 +51,11 @@ export class PIIDecryptionService {
         }
       }
 
+
       // Decrypt lastName if available
       if (user.lastNameEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.lastNameEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.lastNameEncrypted);
           decryptedData.lastName = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -52,7 +70,7 @@ export class PIIDecryptionService {
       // Decrypt email if available
       if (user.emailEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.emailEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.emailEncrypted);
           decryptedData.email = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -67,7 +85,7 @@ export class PIIDecryptionService {
       // Decrypt phone if available
       if (user.phoneEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.phoneEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.phoneEncrypted);
           decryptedData.phone = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -82,7 +100,7 @@ export class PIIDecryptionService {
       // Decrypt specialty if available
       if (user.specialtyEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.specialtyEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.specialtyEncrypted);
           decryptedData.specialty = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -97,7 +115,7 @@ export class PIIDecryptionService {
       // Decrypt medicalLicenseNumber if available
       if (user.medicalLicenseNumberEncrypted) {
         try {
-          const encryptedData = JSON.parse(user.medicalLicenseNumberEncrypted.toString());
+          const encryptedData = parseEncryptedData(user.medicalLicenseNumberEncrypted);
           decryptedData.medicalLicenseNumber = PIIProtectionService.decryptField(
             encryptedData.encryptedData,
             encryptedData.iv,
@@ -184,5 +202,171 @@ export class PIIDecryptionService {
 
     // Add more complex access control logic here
     return false;
+  }
+
+  /**
+   * Decrypt patient PII data from encrypted database fields
+   */
+  static async decryptPatientPII(patient: any): Promise<any> {
+    try {
+      if (!patient) return null;
+
+      const decryptedPatientData: any = {};
+
+      // Helper function to parse encrypted data (same as in decryptUserPII)
+      const parseEncryptedData = (encryptedField: any) => {
+        if (Buffer.isBuffer(encryptedField)) {
+          const bufferString = Buffer.from(encryptedField).toString('utf8');
+          return JSON.parse(bufferString);
+        } else if (typeof encryptedField === 'string') {
+          return JSON.parse(encryptedField);
+        } else if (encryptedField instanceof Uint8Array) {
+          // Handle Uint8Array from database - convert to proper buffer first
+          const buffer = Buffer.from(encryptedField);
+          const bufferString = buffer.toString('utf8');
+          return JSON.parse(bufferString);
+        } else {
+          return encryptedField;
+        }
+      };
+
+      // Decrypt patient phone if available
+      if (patient.phoneEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.phoneEncrypted);
+          decryptedPatientData.phone = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt patient phone:", error);
+          decryptedPatientData.phone = "[Encrypted]";
+        }
+      }
+
+      // Decrypt address fields if available
+      if (patient.addressStreetEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.addressStreetEncrypted);
+          decryptedPatientData.addressStreet = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt address street:", error);
+          decryptedPatientData.addressStreet = "[Encrypted]";
+        }
+      }
+
+      if (patient.addressCityEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.addressCityEncrypted);
+          decryptedPatientData.addressCity = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt address city:", error);
+          decryptedPatientData.addressCity = "[Encrypted]";
+        }
+      }
+
+      if (patient.addressStateEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.addressStateEncrypted);
+          decryptedPatientData.addressState = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt address state:", error);
+          decryptedPatientData.addressState = "[Encrypted]";
+        }
+      }
+
+      if (patient.addressZipEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.addressZipEncrypted);
+          decryptedPatientData.addressZip = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt address zip:", error);
+          decryptedPatientData.addressZip = "[Encrypted]";
+        }
+      }
+
+      if (patient.addressCountryEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.addressCountryEncrypted);
+          decryptedPatientData.addressCountry = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt address country:", error);
+          decryptedPatientData.addressCountry = "[Encrypted]";
+        }
+      }
+
+      // Decrypt emergency contact fields if available
+      if (patient.emergencyNameEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.emergencyNameEncrypted);
+          decryptedPatientData.emergencyName = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt emergency name:", error);
+          decryptedPatientData.emergencyName = "[Encrypted]";
+        }
+      }
+
+      if (patient.emergencyRelationshipEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.emergencyRelationshipEncrypted);
+          decryptedPatientData.emergencyRelationship = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt emergency relationship:", error);
+          decryptedPatientData.emergencyRelationship = "[Encrypted]";
+        }
+      }
+
+      if (patient.emergencyPhoneEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(patient.emergencyPhoneEncrypted);
+          decryptedPatientData.emergencyPhone = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt emergency phone:", error);
+          decryptedPatientData.emergencyPhone = "[Encrypted]";
+        }
+      }
+
+      return decryptedPatientData;
+    } catch (error) {
+      logger.error("Failed to decrypt patient PII:", error);
+      throw new AppError(
+        ErrorCodes.INTERNAL_ERROR,
+        "Failed to decrypt patient data",
+        500
+      );
+    }
   }
 }

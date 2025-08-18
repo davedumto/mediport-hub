@@ -248,19 +248,20 @@ export async function POST(request: NextRequest) {
       path: "/",
     };
 
-    // Prepare safe user data for response
-    const safeUserData = PIIProtectionService.prepareUserDataForResponse(user, false);
-
+    // Prepare safe user data for response - ONLY return minimal required data
     const response = NextResponse.json(
       {
         message: "Login successful.",
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         user: {
-          id: safeUserData.id,
-          role: safeUserData.role, // Return the exact role value, not lowercase
-          status: safeUserData.isActive ? "active" : "inactive",
-          // No PII data returned for security
+          id: user.id,
+          role: user.role,
+          status: user.isActive ? "active" : "inactive",
+          emailVerified: user.emailVerified,
+          mfaEnabled: user.mfaEnabled,
+          // NO PII data - no names, emails, phone numbers, etc.
+          // Frontend should call /api/auth/profile with proper decryption if needed
         },
       },
       { status: 200 }

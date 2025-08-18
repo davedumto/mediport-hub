@@ -34,8 +34,8 @@ export class EncryptionService {
       // Generate IV
       const iv = crypto.randomBytes(this.ivLength);
 
-      // Create cipher
-      const cipher = crypto.createCipher(this.algorithm, keyBuffer);
+      // Create cipher with IV
+      const cipher = crypto.createCipheriv(this.algorithm, keyBuffer, iv);
       cipher.setAAD(Buffer.from("mediport-pii", "utf8")); // Additional authenticated data
 
       // Encrypt data
@@ -74,8 +74,8 @@ export class EncryptionService {
       const ivBuffer = Buffer.from(iv, "hex");
       const tagBuffer = Buffer.from(tag, "hex");
 
-      // Create decipher
-      const decipher = crypto.createDecipher(this.algorithm, keyBuffer);
+      // Create decipher with IV
+      const decipher = crypto.createDecipheriv(this.algorithm, keyBuffer, ivBuffer);
       decipher.setAAD(Buffer.from("mediport-pii", "utf8"));
       decipher.setAuthTag(tagBuffer);
 

@@ -171,8 +171,25 @@ export async function GET(
 
     if (medicalRecord.descriptionEncrypted) {
       try {
-        decryptedDescription = await PIIProtectionService.decryptField(
-          Buffer.from(medicalRecord.descriptionEncrypted).toString("utf-8")
+        // Helper function to parse encrypted data
+        const parseEncryptedData = (encryptedField: any) => {
+          if (Buffer.isBuffer(encryptedField)) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          } else if (typeof encryptedField === 'string') {
+            return JSON.parse(encryptedField);
+          } else if (encryptedField instanceof Uint8Array) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          }
+          return encryptedField;
+        };
+
+        const encryptedData = parseEncryptedData(medicalRecord.descriptionEncrypted);
+        decryptedDescription = PIIProtectionService.decryptField(
+          encryptedData.encryptedData,
+          encryptedData.iv,
+          encryptedData.tag
         );
       } catch (error) {
         logger.error("Failed to decrypt description:", error);
@@ -182,8 +199,25 @@ export async function GET(
 
     if (medicalRecord.findingsEncrypted) {
       try {
-        decryptedFindings = await PIIProtectionService.decryptField(
-          Buffer.from(medicalRecord.findingsEncrypted).toString("utf-8")
+        // Helper function to parse encrypted data
+        const parseEncryptedData = (encryptedField: any) => {
+          if (Buffer.isBuffer(encryptedField)) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          } else if (typeof encryptedField === 'string') {
+            return JSON.parse(encryptedField);
+          } else if (encryptedField instanceof Uint8Array) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          }
+          return encryptedField;
+        };
+
+        const encryptedData = parseEncryptedData(medicalRecord.findingsEncrypted);
+        decryptedFindings = PIIProtectionService.decryptField(
+          encryptedData.encryptedData,
+          encryptedData.iv,
+          encryptedData.tag
         );
       } catch (error) {
         logger.error("Failed to decrypt findings:", error);
@@ -193,8 +227,25 @@ export async function GET(
 
     if (medicalRecord.recommendationsEncrypted) {
       try {
-        decryptedRecommendations = await PIIProtectionService.decryptField(
-          Buffer.from(medicalRecord.recommendationsEncrypted).toString("utf-8")
+        // Helper function to parse encrypted data
+        const parseEncryptedData = (encryptedField: any) => {
+          if (Buffer.isBuffer(encryptedField)) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          } else if (typeof encryptedField === 'string') {
+            return JSON.parse(encryptedField);
+          } else if (encryptedField instanceof Uint8Array) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          }
+          return encryptedField;
+        };
+
+        const encryptedData = parseEncryptedData(medicalRecord.recommendationsEncrypted);
+        decryptedRecommendations = PIIProtectionService.decryptField(
+          encryptedData.encryptedData,
+          encryptedData.iv,
+          encryptedData.tag
         );
       } catch (error) {
         logger.error("Failed to decrypt recommendations:", error);

@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
 import { AuditService, AuditAction } from "../../../lib/audit";
-import { AppError, ErrorCodes } from "../../../utils/errors";
 import logger from "../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
 import { hasPermission } from "../../../lib/permissions";
 import { Permission } from "../../../types/auth";
-import { createAppointmentSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../services/piiProtectionService";
-import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   try {
@@ -77,7 +74,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    const whereClause: any = {};
+    const whereClause: Record<string, unknown> = {};
 
     if (patientId) {
       whereClause.patientId = patientId;
@@ -96,12 +93,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (startDate || endDate) {
-      whereClause.startTime = {};
+      whereClause.startTime = {} as any;
       if (startDate) {
-        whereClause.startTime.gte = new Date(startDate);
+        (whereClause.startTime as any).gte = new Date(startDate);
       }
       if (endDate) {
-        whereClause.startTime.lte = new Date(endDate);
+        (whereClause.startTime as any).lte = new Date(endDate);
       }
     }
 
@@ -453,8 +450,13 @@ export async function POST(request: NextRequest) {
         patient: {
           select: {
             id: true,
-            firstNameEncrypted: true,
-            lastNameEncrypted: true,
+            user: {
+              select: {
+                id: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+              },
+            },
           },
         },
         provider: {

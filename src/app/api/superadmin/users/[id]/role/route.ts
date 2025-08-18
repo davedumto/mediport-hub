@@ -13,11 +13,15 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let body: any = {};
+  let userId: string;
+  
   try {
-    const { id: userId } = await params;
+    const { id } = await params;
+    userId = id;
     console.log("Debug - Role change API called for user:", userId);
 
-    const body = await request.json();
+    body = await request.json();
     const { newRole, reason } = body;
 
     // Extract request info once for use throughout the function
@@ -249,15 +253,27 @@ export async function PUT(
         console.log("Debug - Existing roles revoked");
 
         console.log("Debug - Finding new role:", newRole);
+        console.log("Debug - Mapped new role:", mappedNewRole);
 
-        // Find the new role
-        const role = await tx.role.findUnique({
-          where: { name: newRole },
+        // Find the new role using mapped role name first, then fallback to original
+        let role = await tx.role.findUnique({
+          where: { name: mappedNewRole },
         });
 
         if (!role) {
-          console.log("Debug - Role not found:", newRole);
-          throw new Error(`Role ${newRole} not found`);
+          console.log("Debug - Mapped role not found, trying original newRole:", newRole);
+          // Try with original newRole if mapped version doesn't exist
+          role = await tx.role.findUnique({
+            where: { name: newRole },
+          });
+          
+          if (!role) {
+            console.log("Debug - Neither mapped role nor original role found:", { mappedNewRole, newRole });
+            throw new Error(`Role ${newRole} not found`);
+          }
+          
+          // Use the original role if found
+          console.log("Debug - Using original role:", role);
         }
 
         console.log("Debug - Role found:", role);
@@ -344,8 +360,8 @@ export async function PUT(
     console.error("Debug - Role change error details:", {
       error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
-      targetUserId: params ? (await params).id : "unknown",
-      newRole: body?.newRole,
+      targetUserId: userId || "unknown",
+      newRole: body?.newRole || "unknown",
       errorType: error?.constructor?.name,
       errorDetails: error,
     });

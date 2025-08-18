@@ -4,9 +4,25 @@ import { AuditService, AuditAction } from "../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
+import { PIIProtectionService } from "../../../../services/piiProtectionService";
+import { withEncryptionMiddleware } from "../../../../middleware/encryption";
 
-export async function GET(request: NextRequest) {
+async function profileHandler(request: NextRequest) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     const authHeader = request.headers.get("authorization");
     const accessToken = authHeader?.replace("Bearer ", "");
 
@@ -51,43 +67,90 @@ export async function GET(request: NextRequest) {
     const permissions =
       user.userRoles?.flatMap((ur) => ur.role.permissions as string[]) || [];
 
-    // Log profile access
+    const requestInfo = extractRequestInfoFromRequest(request);
+
+    // Log profile access with masked email
     await AuditService.log({
       userId: user.id,
-      userEmail: user.email,
+      userEmail: PIIProtectionService.prepareUserDataForResponse({ email: user.email }, true).email,
       userRole: user.role,
       action: AuditAction.PROFILE_ACCESSED,
       resource: "user_profile",
       resourceId: user.id,
       success: true,
-      ipAddress: extractRequestInfoFromRequest(request).ipAddress,
-      userAgent: extractRequestInfoFromRequest(request).userAgent,
-      requestId: extractRequestInfoFromRequest(request).requestId,
+      ...requestInfo,
     });
+
+    // Check if the request wants decrypted data
+    const { searchParams } = new URL(request.url);
+    const includeDecrypted = searchParams.get("includeDecrypted") === "true";
+
+    // For patients and users without encryption, show plaintext data
+    // For users with encryption, mask the plaintext and require decryption
+    const hasAnyEncryptedData = !!(user.firstNameEncrypted || user.lastNameEncrypted || 
+                                   user.emailEncrypted || user.phoneEncrypted ||
+                                   user.specialtyEncrypted || user.medicalLicenseNumberEncrypted);
+    
+    let safeUserData;
+    if (!hasAnyEncryptedData) {
+      // User has no encryption - show plaintext data directly (for legacy users or patients)
+      safeUserData = {
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        specialty: user.specialty,
+        medicalLicenseNumber: user.medicalLicenseNumber,
+      };
+    } else {
+      // User has encryption - mask plaintext data and require decryption
+      const userDataForMasking = {
+        ...user,
+        firstName: user.firstName || "[Encrypted]",
+        lastName: user.lastName || "[Encrypted]",
+        phone: user.phone || "[Encrypted]",
+        specialty: user.specialty || "[Encrypted]",
+        medicalLicenseNumber: user.medicalLicenseNumber || "[Encrypted]",
+      };
+      safeUserData = PIIProtectionService.prepareUserDataForResponse(userDataForMasking, true);
+    }
+
+    // Build response with only necessary fields
+    const responseData = {
+      id: user.id,
+      role: user.role,
+      permissions,
+      isActive: user.isActive,
+      mfaEnabled: user.mfaEnabled,
+      emailVerified: user.emailVerified,
+      lastLogin: user.lastLogin,
+      verificationStatus: user.verificationStatus,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      // Masked PII fields - frontend can request decryption separately
+      email: safeUserData.email || "[Protected]",
+      firstName: safeUserData.firstName || "[Protected]",
+      lastName: safeUserData.lastName || "[Protected]",
+      dateOfBirth: user.dateOfBirth, // Not PII
+      // Professional fields (masked if present)
+      medicalLicenseNumber: safeUserData.medicalLicenseNumber || null,
+      specialty: safeUserData.specialty || null,
+      // Encrypted field indicators
+      hasEncryptedData: {
+        firstName: !!user.firstNameEncrypted,
+        lastName: !!user.lastNameEncrypted,
+        email: !!user.emailEncrypted,
+        medicalLicenseNumber: !!user.medicalLicenseNumberEncrypted,
+        specialty: !!user.specialtyEncrypted,
+      },
+    };
 
     return NextResponse.json(
       {
         success: true,
         message: "Profile retrieved successfully",
         data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            permissions,
-            isActive: user.isActive,
-            mfaEnabled: user.mfaEnabled,
-            lastLogin: user.lastLogin,
-            phone: user.phone,
-            dateOfBirth: user.dateOfBirth,
-            medicalLicenseNumber: user.medicalLicenseNumber,
-            specialty: user.specialty,
-            verificationStatus: user.verificationStatus,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-          },
+          user: responseData,
         },
       },
       { status: 200 }
@@ -116,3 +179,10 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// Export the handler with encryption middleware
+export const GET = withEncryptionMiddleware(profileHandler, {
+  enablePIIProtection: true,
+  maskingLevel: "partial",
+  includeAuditLog: true,
+});

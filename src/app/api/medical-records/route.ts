@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
 import { AuditService, AuditAction } from "../../../lib/audit";
-import { AppError, ErrorCodes } from "../../../utils/errors";
 import logger from "../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
 import { hasPermission } from "../../../lib/permissions";
@@ -10,7 +9,6 @@ import { Permission } from "../../../types/auth";
 import { createMedicalRecordSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../services/piiProtectionService";
-import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,7 +74,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (patientId) {
       whereClause.patientId = patientId;

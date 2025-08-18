@@ -43,7 +43,9 @@ export enum Permission {
   APPOINTMENT_READ_ASSIGNED = "appointment:read:assigned",
   APPOINTMENT_READ_OWN = "appointment:read:own",
   APPOINTMENT_UPDATE = "appointment:update",
+  APPOINTMENT_UPDATE_ALL = "appointment:update:all",
   APPOINTMENT_DELETE = "appointment:delete",
+  APPOINTMENT_DELETE_ALL = "appointment:delete:all",
 
   // System Administration
   AUDIT_READ = "audit:read",

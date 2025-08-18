@@ -35,6 +35,9 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
     patient: "",
     date: "",
     time: "",
+    hour: "09",
+    minute: "00",
+    period: "AM",
     purpose: "Routine Checkup",
     notes: "",
     status: "Pending",
@@ -79,7 +82,22 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
 
   const handleSchedule = () => {
     if (onSchedule) {
-      onSchedule(formData);
+      // Convert 12-hour time to 24-hour format
+      let hour24 = parseInt(formData.hour);
+      if (formData.period === "PM" && hour24 !== 12) {
+        hour24 += 12;
+      } else if (formData.period === "AM" && hour24 === 12) {
+        hour24 = 0;
+      }
+      
+      // Format time as HH:MM in 24-hour format
+      const formattedTime = `${hour24.toString().padStart(2, '0')}:${formData.minute}`;
+      
+      // Pass the formatted data with proper 24-hour time
+      onSchedule({
+        ...formData,
+        time: formattedTime,
+      });
     }
     onClose();
   };
@@ -89,6 +107,9 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
       patient: "",
       date: "",
       time: "",
+      hour: "09",
+      minute: "00",
+      period: "AM",
       purpose: "Routine Checkup",
       notes: "",
       status: "Pending",
@@ -163,12 +184,42 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Time
               </label>
-              <input
-                type="time"
-                value={formData.time}
-                onChange={(e) => handleInputChange("time", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="flex gap-2">
+                <select
+                  value={formData.hour}
+                  onChange={(e) => handleInputChange("hour", e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  {[...Array(12)].map((_, i) => {
+                    const hour = (i + 1).toString().padStart(2, '0');
+                    return (
+                      <option key={hour} value={hour}>
+                        {hour}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="flex items-center px-2 text-gray-700">:</span>
+                <select
+                  value={formData.minute}
+                  onChange={(e) => handleInputChange("minute", e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  {["00", "15", "30", "45"].map((minute) => (
+                    <option key={minute} value={minute}>
+                      {minute}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={formData.period}
+                  onChange={(e) => handleInputChange("period", e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
           </div>
           <div>

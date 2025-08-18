@@ -4,9 +4,25 @@ import { AuditService, AuditAction } from "@/lib/audit";
 import { extractRequestInfoFromRequest } from "@/utils/appRouterHelpers";
 import logger from "@/lib/logger";
 import { verifyAccessToken } from "@/lib/auth";
+import { PIIDecryptionService } from "@/services/piiDecryptionService";
+import { PIIProtectionService } from "@/services/piiProtectionService";
 
 export async function GET(request: NextRequest) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     // Extract and verify JWT token
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -100,10 +116,16 @@ export async function GET(request: NextRequest) {
       where: whereClause,
       include: {
         patient: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+                emailEncrypted: true,
+              },
+            },
           },
         },
         provider: {
@@ -111,6 +133,10 @@ export async function GET(request: NextRequest) {
             id: true,
             firstName: true,
             lastName: true,
+            firstNameEncrypted: true,
+            lastNameEncrypted: true,
+            emailEncrypted: true,
+            specialtyEncrypted: true,
             role: true,
             specialty: true,
           },
@@ -120,6 +146,57 @@ export async function GET(request: NextRequest) {
       skip: (page - 1) * limit,
       take: limit,
     });
+
+    // Decrypt PII data for each appointment's patient and provider
+    const appointmentsWithDecryptedData = await Promise.all(
+      appointments.map(async (appointment) => {
+        try {
+          // Decrypt patient PII data if user data exists
+          let decryptedPatientData = null;
+          if (appointment.patient?.user) {
+            decryptedPatientData = await PIIDecryptionService.decryptUserPII(appointment.patient.user);
+          }
+
+          // Decrypt provider (doctor) PII data
+          let decryptedProviderData = null;
+          if (appointment.provider) {
+            decryptedProviderData = await PIIDecryptionService.decryptUserPII(appointment.provider);
+          }
+
+          return {
+            ...appointment,
+            patient: {
+              ...appointment.patient,
+              firstName: decryptedPatientData?.firstName || appointment.patient?.firstName || "Unknown",
+              lastName: decryptedPatientData?.lastName || appointment.patient?.lastName || "Patient",
+            },
+            provider: {
+              ...appointment.provider,
+              firstName: decryptedProviderData?.firstName || appointment.provider?.firstName || "Unknown",
+              lastName: decryptedProviderData?.lastName || appointment.provider?.lastName || "Provider",
+              specialty: decryptedProviderData?.specialty || appointment.provider?.specialty || "General",
+            },
+          };
+        } catch (error) {
+          logger.warn(`Failed to decrypt PII for appointment ${appointment.id}:`, error);
+          // Return appointment with fallback data
+          return {
+            ...appointment,
+            patient: {
+              ...appointment.patient,
+              firstName: appointment.patient?.firstName || "[Encrypted]",
+              lastName: appointment.patient?.lastName || "[Encrypted]",
+            },
+            provider: {
+              ...appointment.provider,
+              firstName: appointment.provider?.firstName || "[Encrypted]", 
+              lastName: appointment.provider?.lastName || "[Encrypted]",
+              specialty: appointment.provider?.specialty || "[Encrypted]",
+            },
+          };
+        }
+      })
+    );
 
     // Log successful access
     await AuditService.log({
@@ -138,7 +215,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        appointments: appointments.map((appointment) => ({
+        appointments: appointmentsWithDecryptedData.map((appointment) => ({
           id: appointment.id,
           patientId: appointment.patientId,
           providerId: appointment.providerId,

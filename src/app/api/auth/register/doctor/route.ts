@@ -134,10 +134,17 @@ export async function POST(request: NextRequest) {
         medicalLicenseNumber,
       });
 
-    // Create user with encrypted PII fields
+    // Create user with ONLY encrypted PII fields - no plain text PII stored!
     const user = await prisma.user.create({
       data: {
-        // Store encrypted PII fields
+        // Email is required for unique constraint but we'll also store encrypted version
+        email,  // This is needed for login lookup, but sensitive data is encrypted
+        // DO NOT store plain text PII - only encrypted versions
+        firstName: null,  // Explicitly null - use encrypted version only
+        lastName: null,   // Explicitly null - use encrypted version only
+        specialty: null,  // Explicitly null - use encrypted version only
+        medicalLicenseNumber: null, // Explicitly null - use encrypted version only
+        // Store encrypted PII fields - this is the ONLY place PII is stored
         firstNameEncrypted: Buffer.from(
           JSON.stringify(encryptedFields.firstName || {}),
           "utf8"
@@ -209,7 +216,7 @@ export async function POST(request: NextRequest) {
       // Send verification email
       await emailService.sendVerificationEmail({
         email: user.email,
-        firstName: user.firstName,
+        firstName: user.firstName || "Doctor",
         otp,
         expiresIn: "15 minutes",
       });

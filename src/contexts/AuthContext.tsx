@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 export interface User {
   id: string;
@@ -196,12 +197,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData.data.user);
+        const maskedUser = userData.data.user;
+        
+        // Set the masked user data immediately for quick display
+        setUser(maskedUser);
+
+        // Attempt to decrypt PII data in the background
+        try {
+          if (maskedUser.id && token) {
+            console.log("Attempting to decrypt PII for user:", maskedUser.id);
+            console.log("Using token:", token ? "Token available" : "No token");
+            
+            const decryptedData = await PIIDecryptionClient.decryptUserProfile(
+              maskedUser.id,
+              token
+            );
+
+            if (decryptedData) {
+              console.log("Decryption successful, merging data");
+              // Merge decrypted data with existing user data
+              const mergedUser = {
+                ...maskedUser,
+                ...decryptedData,
+              };
+              setUser(mergedUser);
+            } else {
+              console.log("Decryption returned null, continuing with masked data");
+            }
+          }
+        } catch (decryptError) {
+          console.error("Failed to decrypt user PII:", decryptError);
+          // Continue with masked data if decryption fails
+        }
 
         // Show welcome toast only if not during initialization
         if (tokens) {
-          toast.success(`Welcome back, ${userData.data.user.firstName}!`, {
-            description: `You're logged in as a ${userData.data.user.role.toLowerCase()}`,
+          const displayName = maskedUser.firstName?.includes("*") 
+            ? "User" 
+            : maskedUser.firstName;
+          toast.success(`Welcome back, ${displayName}!`, {
+            description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
             duration: 4000,
           });
         }
@@ -271,13 +306,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           if (profileResponse.ok) {
             const userData = await profileResponse.json();
-            setUser(userData.data.user);
+            const maskedUser = userData.data.user;
+            setUser(maskedUser);
 
-            // Show welcome toast
-            toast.success(`Welcome back, ${userData.data.user.firstName}!`, {
-              description: `You're logged in as a ${userData.data.user.role.toLowerCase()}`,
-              duration: 4000,
-            });
+            // Try to decrypt PII data
+            try {
+              if (maskedUser.id && data.accessToken) {
+                const decryptedData = await PIIDecryptionClient.decryptUserProfile(
+                  maskedUser.id,
+                  data.accessToken
+                );
+
+                if (decryptedData) {
+                  const mergedUser = {
+                    ...maskedUser,
+                    ...decryptedData,
+                  };
+                  setUser(mergedUser);
+                  
+                  // Show welcome toast with decrypted name
+                  toast.success(`Welcome back, ${decryptedData.firstName || "User"}!`, {
+                    description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
+                    duration: 4000,
+                  });
+                } else {
+                  // Show welcome toast with masked data
+                  toast.success(`Welcome back!`, {
+                    description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
+                    duration: 4000,
+                  });
+                }
+              }
+            } catch (decryptError) {
+              console.error("Failed to decrypt user PII during login:", decryptError);
+              // Show welcome toast with masked data
+              toast.success(`Welcome back!`, {
+                description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
+                duration: 4000,
+              });
+            }
           }
         } catch (error) {
           console.error("Failed to fetch user profile:", error);

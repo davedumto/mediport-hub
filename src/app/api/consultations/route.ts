@@ -10,7 +10,6 @@ import { Permission } from "../../../types/auth";
 import { createConsultationSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../services/piiProtectionService";
-import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   try {

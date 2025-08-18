@@ -5,8 +5,12 @@ const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client"],
   },
-  // Disable turbopack completely for better production compatibility
-  turbopack: false,
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
 };
 
 export default nextConfig;

@@ -173,6 +173,8 @@ export async function POST(request: NextRequest) {
     // Parse request body
     const body = await request.json();
     const { doctorId, patientId } = body;
+    
+    console.log("Debug - Assignment request body:", { doctorId, patientId });
 
     if (!doctorId || !patientId) {
       return NextResponse.json(
@@ -211,12 +213,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify patient exists
+    console.log("Debug - Looking for patient with ID:", patientId);
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
-      select: { id: true, assignedProviderId: true },
+      select: { id: true, assignedProviderId: true, email: true, firstName: true, lastName: true },
     });
+    
+    console.log("Debug - Patient lookup result:", patient);
 
     if (!patient) {
+      // Let's also check if there are any patients in the database
+      const allPatients = await prisma.patient.findMany({
+        select: { id: true, email: true, firstName: true, lastName: true },
+        take: 5
+      });
+      console.log("Debug - Sample of all patients in database:", allPatients);
+      
       return NextResponse.json(
         {
           error: "Bad Request",

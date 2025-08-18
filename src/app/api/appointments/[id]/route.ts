@@ -6,10 +6,8 @@ import logger from "../../../../lib/logger";
 import { verifyAccessToken } from "../../../../lib/auth";
 import { hasPermission } from "../../../../lib/permissions";
 import { Permission } from "../../../../types/auth";
-import { updateAppointmentSchema } from "../../../../lib/validation";
 import { SanitizationService } from "../../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
-import crypto from "crypto";
 
 export async function GET(
   request: NextRequest,
@@ -170,11 +168,26 @@ export async function GET(
 
     if (appointment.notesEncrypted) {
       try {
-        // Convert Uint8Array to string before decryption
-        const notesString = Buffer.from(appointment.notesEncrypted).toString(
-          "utf-8"
+        // Helper function to parse encrypted data
+        const parseEncryptedData = (encryptedField: any) => {
+          if (Buffer.isBuffer(encryptedField)) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          } else if (typeof encryptedField === 'string') {
+            return JSON.parse(encryptedField);
+          } else if (encryptedField instanceof Uint8Array) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          }
+          return encryptedField;
+        };
+
+        const encryptedData = parseEncryptedData(appointment.notesEncrypted);
+        decryptedNotes = PIIProtectionService.decryptField(
+          encryptedData.encryptedData,
+          encryptedData.iv,
+          encryptedData.tag
         );
-        decryptedNotes = await PIIProtectionService.decryptField(notesString);
       } catch (error) {
         logger.error("Failed to decrypt notes:", error);
         decryptedNotes = "***DECRYPTION_ERROR***";
@@ -460,8 +473,13 @@ export async function PUT(
         patient: {
           select: {
             id: true,
-            firstNameEncrypted: true,
-            lastNameEncrypted: true,
+            user: {
+              select: {
+                id: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+              },
+            },
           },
         },
         provider: {

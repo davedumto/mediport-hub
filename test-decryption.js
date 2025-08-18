@@ -1,87 +1,71 @@
-// Simple test to verify decryption service
-const { DecryptionService } = require("./src/services/decryptionService.ts");
+/**
+ * Script to test PII decryption without frontend
+ */
 
-// Mock localStorage for testing
-global.localStorage = {
-  getItem: (key) => {
-    if (key === "auth_tokens") {
-      return JSON.stringify({
-        accessToken: "test-token-123",
-      });
-    }
-    return null;
-  },
-  setItem: () => {},
-  removeItem: () => {},
-};
+const { PrismaClient } = require('@prisma/client');
 
-// Mock fetch for testing
-global.fetch = async (url, options) => {
-  if (url === "/api/encryption/key") {
-    // Check if Authorization header is present
-    if (options.headers.Authorization === "Bearer test-token-123") {
-      return {
-        ok: true,
-        json: async () => ({
-          success: true,
-          key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        }),
-      };
-    } else {
-      return {
-        ok: false,
-        status: 401,
-      };
-    }
-  }
+const prisma = new PrismaClient();
 
-  return {
-    ok: false,
-    status: 404,
-  };
-};
-
-// Mock crypto for testing
-global.crypto = {
-  subtle: {
-    importKey: async (algorithm, keyBuffer, extractable, usages) => {
-      return "mock-crypto-key";
-    },
-    decrypt: async (algorithm, key, data) => {
-      return new TextEncoder().encode("decrypted-data");
-    },
-  },
-};
-
-// Test the decryption service
-async function testDecryptionService() {
+async function testDecryption() {
   try {
-    console.log("Testing DecryptionService...");
+    // Get user from database
+    const user = await prisma.user.findUnique({
+      where: { email: 'ejeredavid2001@gmail.com' },
+      include: {
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
 
-    // Test getting encryption key
-    const key = await DecryptionService.getEncryptionKey();
-    console.log(
-      "✅ Encryption key retrieved successfully:",
-      key ? "Yes" : "No"
-    );
+    if (!user) {
+      console.log('❌ User not found');
+      return;
+    }
 
-    // Test decrypting PII data
-    const mockEncryptedData = Buffer.from(
-      JSON.stringify({
-        encrypted: "test-encrypted",
-        iv: "test-iv",
-        tag: "test-tag",
-      })
-    ).toString("base64");
+    console.log('✅ Found user:', user.id);
+    
+    // Let me directly test the decryption logic first by testing the service
+    console.log('Testing parseEncryptedData directly...');
+    
+    if (user.firstNameEncrypted) {
+      console.log('firstNameEncrypted type:', typeof user.firstNameEncrypted);
+      console.log('firstNameEncrypted instanceof Uint8Array:', user.firstNameEncrypted instanceof Uint8Array);
+      
+      // Try the parsing logic
+      let encryptedData;
+      if (Buffer.isBuffer(user.firstNameEncrypted)) {
+        const bufferString = Buffer.from(user.firstNameEncrypted).toString('utf8');
+        encryptedData = JSON.parse(bufferString);
+      } else if (typeof user.firstNameEncrypted === 'string') {
+        encryptedData = JSON.parse(user.firstNameEncrypted);
+      } else if (user.firstNameEncrypted instanceof Uint8Array) {
+        // Handle Uint8Array from database - convert to proper buffer first
+        const buffer = Buffer.from(user.firstNameEncrypted);
+        const bufferString = buffer.toString('utf8');
+        encryptedData = JSON.parse(bufferString);
+        console.log('Parsed encrypted data:', encryptedData);
+      } else {
+        encryptedData = user.firstNameEncrypted;
+      }
+      
+      if (encryptedData && encryptedData.encryptedData && encryptedData.iv && encryptedData.tag) {
+        console.log('✅ Successfully parsed encrypted data structure');
+        console.log('encryptedData:', encryptedData.encryptedData?.substring(0, 10) + '...');
+        console.log('iv:', encryptedData.iv?.substring(0, 10) + '...');
+        console.log('tag:', encryptedData.tag?.substring(0, 10) + '...');
+      } else {
+        console.log('❌ Invalid encrypted data structure');
+      }
+    }
 
-    const decrypted = await DecryptionService.decryptPII(mockEncryptedData);
-    console.log("✅ PII decryption successful:", decrypted);
-
-    console.log("🎉 All tests passed!");
   } catch (error) {
-    console.error("❌ Test failed:", error.message);
+    console.error('Error:', error);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-testDecryptionService();
-
+testDecryption();
