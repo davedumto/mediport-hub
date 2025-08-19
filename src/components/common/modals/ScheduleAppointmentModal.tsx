@@ -89,10 +89,12 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
       } else if (formData.period === "AM" && hour24 === 12) {
         hour24 = 0;
       }
-      
+
       // Format time as HH:MM in 24-hour format
-      const formattedTime = `${hour24.toString().padStart(2, '0')}:${formData.minute}`;
-      
+      const formattedTime = `${hour24.toString().padStart(2, "0")}:${
+        formData.minute
+      }`;
+
       // Pass the formatted data with proper 24-hour time
       onSchedule({
         ...formData,
@@ -191,7 +193,7 @@ const ScheduleAppointmentModal: FC<ScheduleAppointmentModalProps> = ({
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 >
                   {[...Array(12)].map((_, i) => {
-                    const hour = (i + 1).toString().padStart(2, '0');
+                    const hour = (i + 1).toString().padStart(2, "0");
                     return (
                       <option key={hour} value={hour}>
                         {hour}

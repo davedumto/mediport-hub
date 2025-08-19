@@ -12,6 +12,7 @@ import logger from "../../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import { getRolePermissions } from "../../../../lib/permissions";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
+import { ClientEncryptionService } from "../../../../services/clientEncryptionService";
 
 // Ensure this route is properly exported for Vercel
 export async function POST(request: NextRequest) {
@@ -32,7 +33,44 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { email, password, mfaCode, rememberMe } = body;
+    let email: string,
+      password: string,
+      mfaCode: string | undefined,
+      rememberMe: boolean;
+
+    // Check if the request contains encrypted payload
+    if (ClientEncryptionService.isEncryptedPayload(body)) {
+      console.log("🔓 Decrypting login payload...");
+      try {
+        const userAgent = request.headers.get("user-agent") || undefined;
+        const decryptedCredentials =
+          ClientEncryptionService.decryptLoginCredentials(
+            body.encryptedPayload,
+            userAgent
+          );
+
+        email = decryptedCredentials.email;
+        password = decryptedCredentials.password;
+        mfaCode = decryptedCredentials.mfaCode;
+        rememberMe = decryptedCredentials.rememberMe || false;
+
+        console.log("✅ Successfully decrypted login credentials");
+      } catch (error) {
+        console.error("❌ Failed to decrypt login payload:", error);
+        return NextResponse.json(
+          {
+            error: "Bad Request",
+            message: "Invalid encrypted payload",
+            details: ["Failed to decrypt login credentials"],
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Legacy support for unencrypted payloads (will be removed in future)
+      console.log("⚠️ Received unencrypted login payload (legacy mode)");
+      ({ email, password, mfaCode, rememberMe } = body);
+    }
 
     // Simple validation
     if (!email || !password) {
@@ -229,7 +267,10 @@ export async function POST(request: NextRequest) {
     // Log successful login with safe PII data
     await AuditService.logLoginSuccess(
       user.id,
-      PIIProtectionService.prepareUserDataForResponse({ email: user.email }, true).email,
+      PIIProtectionService.prepareUserDataForResponse(
+        { email: user.email },
+        true
+      ).email,
       user.role,
       session.id,
       requestInfo,

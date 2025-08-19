@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DashboardStatsSection from "@/components/pages/dashboard/DashboardStats";
 import CalendarSection from "@/components/pages/dashboard/CalendarSection";
 import FeedbackSection from "@/components/pages/dashboard/doctor/FeedbackSection";
@@ -8,7 +8,7 @@ import RouteGuard from "@/components/common/RouteGuard";
 import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 const DoctorDashboard = () => {
-  const { user, tokens, isAuthenticated, isLoading: authLoading, logout, updateUser } = useAuth();
+  const { user, tokens, isAuthenticated, logout, updateUser } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({});
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
@@ -89,15 +89,9 @@ const DoctorDashboard = () => {
     };
 
     decryptUserData();
-  }, [user?.id, tokens?.accessToken]);
+  }, [user?.id, user, tokens?.accessToken, updateUser]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
-
-    fetchDoctorData();
-  }, [isAuthenticated, user]);
-
-  const fetchDoctorData = async () => {
+  const fetchDoctorData = useCallback(async () => {
     if (!user?.id) return;
 
     setIsLoadingAppointments(true);
@@ -166,7 +160,13 @@ const DoctorDashboard = () => {
 
     // Debug: Log the current appointments state
     console.log("Current appointments state:", appointments);
-  };
+  }, [user?.id, currentMonth]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    fetchDoctorData();
+  }, [isAuthenticated, user, fetchDoctorData]);
 
   return (
     <RouteGuard requiredRole="DOCTOR">

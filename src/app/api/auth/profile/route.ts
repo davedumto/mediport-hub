@@ -82,8 +82,9 @@ async function profileHandler(request: NextRequest) {
     });
 
     // Check if the request wants decrypted data
-    const { searchParams } = new URL(request.url);
-    const includeDecrypted = searchParams.get("includeDecrypted") === "true";
+    // Note: includeDecrypted parameter available but not currently used
+    // const { searchParams } = new URL(request.url);
+    // const includeDecrypted = searchParams.get("includeDecrypted") === "true";
 
     // For patients and users without encryption, show plaintext data
     // For users with encryption, mask the plaintext and require decryption

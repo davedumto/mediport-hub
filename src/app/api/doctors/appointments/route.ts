@@ -133,7 +133,9 @@ export async function GET(request: NextRequest) {
           // Decrypt patient PII data if user data exists
           let decryptedPatientData = null;
           if (appointment.patient?.user) {
-            decryptedPatientData = await PIIDecryptionService.decryptUserPII(appointment.patient.user);
+            decryptedPatientData = await PIIDecryptionService.decryptUserPII(
+              appointment.patient.user
+            );
           }
 
           return {
@@ -141,13 +143,25 @@ export async function GET(request: NextRequest) {
             patient: {
               ...appointment.patient,
               // Override with decrypted data if available
-              firstName: decryptedPatientData?.firstName || appointment.patient?.firstName || "Unknown",
-              lastName: decryptedPatientData?.lastName || appointment.patient?.lastName || "Patient",
-              email: decryptedPatientData?.email || appointment.patient?.email || "No email",
+              firstName:
+                decryptedPatientData?.firstName ||
+                appointment.patient?.firstName ||
+                "Unknown",
+              lastName:
+                decryptedPatientData?.lastName ||
+                appointment.patient?.lastName ||
+                "Patient",
+              email:
+                decryptedPatientData?.email ||
+                appointment.patient?.email ||
+                "No email",
             },
           };
         } catch (error) {
-          logger.warn(`Failed to decrypt patient PII for appointment ${appointment.id}:`, error);
+          logger.warn(
+            `Failed to decrypt patient PII for appointment ${appointment.id}:`,
+            error
+          );
           // Return appointment with fallback patient data
           return {
             ...appointment,
@@ -163,28 +177,30 @@ export async function GET(request: NextRequest) {
     );
 
     // Transform appointments to match the expected format
-    const transformedAppointments = appointmentsWithDecryptedPatients.map((appointment) => ({
-      id: appointment.id,
-      patientId: appointment.patientId,
-      providerId: appointment.providerId,
-      startTime: appointment.startTime,
-      endTime: appointment.endTime,
-      timezone: appointment.timezone,
-      type: appointment.type,
-      status: appointment.status,
-      reason: appointment.reason,
-      priority: appointment.priority,
-      notes: appointment.notesEncrypted ? "***ENCRYPTED***" : null,
-      reminderSent: appointment.reminderSent,
-      confirmationSent: appointment.confirmationSent,
-      locationType: appointment.locationType,
-      roomNumber: appointment.roomNumber,
-      virtualMeetingUrl: appointment.virtualMeetingUrl,
-      patient: appointment.patient,
-      provider: appointment.provider,
-      createdAt: appointment.createdAt,
-      updatedAt: appointment.updatedAt,
-    }));
+    const transformedAppointments = appointmentsWithDecryptedPatients.map(
+      (appointment) => ({
+        id: appointment.id,
+        patientId: appointment.patientId,
+        providerId: appointment.providerId,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        timezone: appointment.timezone,
+        type: appointment.type,
+        status: appointment.status,
+        reason: appointment.reason,
+        priority: appointment.priority,
+        notes: appointment.notesEncrypted ? "***ENCRYPTED***" : null,
+        reminderSent: appointment.reminderSent,
+        confirmationSent: appointment.confirmationSent,
+        locationType: appointment.locationType,
+        roomNumber: appointment.roomNumber,
+        virtualMeetingUrl: appointment.virtualMeetingUrl,
+        patient: appointment.patient,
+        provider: appointment.provider,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt,
+      })
+    );
 
     // Log successful access
     await AuditService.log({
@@ -393,18 +409,30 @@ export async function POST(request: NextRequest) {
     let decryptedPatientData = null;
     try {
       if (appointment.patient?.user) {
-        decryptedPatientData = await PIIDecryptionService.decryptUserPII(appointment.patient.user);
+        decryptedPatientData = await PIIDecryptionService.decryptUserPII(
+          appointment.patient.user
+        );
       }
     } catch (error) {
-      logger.warn(`Failed to decrypt patient PII for new appointment ${appointment.id}:`, error);
+      logger.warn(
+        `Failed to decrypt patient PII for new appointment ${appointment.id}:`,
+        error
+      );
     }
 
     // Prepare patient data with decryption
     const patientData = {
       ...appointment.patient,
-      firstName: decryptedPatientData?.firstName || appointment.patient?.firstName || "Unknown",
-      lastName: decryptedPatientData?.lastName || appointment.patient?.lastName || "Patient",
-      email: decryptedPatientData?.email || appointment.patient?.email || "No email",
+      firstName:
+        decryptedPatientData?.firstName ||
+        appointment.patient?.firstName ||
+        "Unknown",
+      lastName:
+        decryptedPatientData?.lastName ||
+        appointment.patient?.lastName ||
+        "Patient",
+      email:
+        decryptedPatientData?.email || appointment.patient?.email || "No email",
     };
 
     // Log successful creation

@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (startDate || endDate) {
-      whereClause.startTime = {} as any;
+      whereClause.startTime = {};
       if (startDate) {
         (whereClause.startTime as any).gte = new Date(startDate);
       }
@@ -286,10 +286,10 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    
+
     // Validate required fields according to the new convention
     const { patientId, doctorId, dateTime, purpose, notes, status } = body;
-    
+
     if (!patientId || !doctorId || !dateTime || !purpose) {
       return NextResponse.json(
         {
@@ -424,7 +424,10 @@ export async function POST(request: NextRequest) {
       : null;
 
     // Generate appointment ID
-    const appointmentId = `A-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+    const appointmentId = `A-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 4)
+      .toUpperCase()}`;
 
     // Create appointment
     const appointment = await prisma.appointment.create({
@@ -437,7 +440,7 @@ export async function POST(request: NextRequest) {
         type: sanitizedData.type,
         status: sanitizedData.status,
         notesEncrypted: encryptedNotes
-          ? Buffer.from(JSON.stringify(encryptedNotes), 'utf8')
+          ? Buffer.from(JSON.stringify(encryptedNotes), "utf8")
           : null,
         priority: "NORMAL",
         reminderSent: false,

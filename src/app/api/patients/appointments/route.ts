@@ -86,7 +86,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause
-    const whereClause: any = {
+    const whereClause: {
+      patientId: string;
+      status?: { in: string[] };
+      startTime?: { gte: Date; lte: Date };
+    } = {
       patientId: patient.id,
     };
 

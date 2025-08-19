@@ -23,7 +23,7 @@ export interface DecryptedUserData {
 }
 
 export class PIIDecryptionClient {
-  private static cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private static cache: Map<string, { data: DecryptedUserData; timestamp: number }> = new Map();
   private static CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   /**
@@ -36,7 +36,7 @@ export class PIIDecryptionClient {
   /**
    * Get cached data if valid
    */
-  private static getCached(key: string): any | null {
+  private static getCached(key: string): DecryptedUserData | null {
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
       return cached.data;
@@ -48,7 +48,7 @@ export class PIIDecryptionClient {
   /**
    * Set cached data
    */
-  private static setCache(key: string, data: any): void {
+  private static setCache(key: string, data: DecryptedUserData): void {
     this.cache.set(key, { data, timestamp: Date.now() });
   }
 
@@ -90,8 +90,30 @@ export class PIIDecryptionClient {
         return null;
       }
 
-      const data = await response.json();
-      const decryptedData = data.data?.user || null;
+      const responseData = await response.json();
+      
+      // Handle encrypted responses (secure mode)
+      if (responseData.encrypted && responseData.encryptedPayload) {
+        console.log("🔓 Decrypting encrypted profile response...");
+        try {
+          // Import ClientSideEncryption for client-side decryption
+          const { ClientSideEncryption } = await import("../lib/clientSideEncryption");
+          const decryptedResponse = await ClientSideEncryption.decryptPayload(
+            responseData.encryptedPayload
+          );
+          const decryptedData = decryptedResponse?.user || null;
+          
+          console.log("✅ Successfully decrypted profile response");
+          return decryptedData;
+        } catch (decryptError) {
+          console.error("❌ Failed to decrypt profile response:", decryptError);
+          return null;
+        }
+      }
+      
+      // Handle legacy unencrypted responses (fallback)
+      console.log("⚠️ Received unencrypted profile response (legacy mode)");
+      const decryptedData = responseData.data?.user || null;
       
       // Cache the result
       if (decryptedData) {
@@ -172,7 +194,7 @@ export class PIIDecryptionClient {
           acc[key] = decryptedData[key];
         }
         return acc;
-      }, {} as any),
+      }, {} as DecryptedUserData),
     };
   }
 }

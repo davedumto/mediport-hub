@@ -6,6 +6,7 @@ import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { PIIDecryptionService } from "../../../../services/piiDecryptionService";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
+import { ClientEncryptionService } from "../../../../services/clientEncryptionService";
 
 /**
  * Endpoint for decrypting user profile PII data
@@ -149,57 +150,79 @@ export async function GET(request: NextRequest) {
       ...requestInfo,
     });
 
-    // SECURITY NOTE: This endpoint returns decrypted PII over HTTPS
-    // Additional security measures:
-    // 1. Requires valid JWT authentication
-    // 2. Role-based access control
-    // 3. Comprehensive audit logging
-    // 4. Rate limiting (via middleware)
-    // 5. Should only be used over HTTPS in production
+    // SECURITY FIX: Encrypt sensitive PII data before transmission
+    // This prevents plain text PII from being exposed over the network
     
-    // Return decrypted profile for authenticated users
-    return NextResponse.json({
-      success: true,
-      data: {
-        user: {
-          email: decryptedUser.email,
-          firstName: decryptedUser.firstName,
-          lastName: decryptedUser.lastName,
-          dateOfBirth: user.dateOfBirth,
-          role: user.role,
-          permissions,
-          isActive: user.isActive,
-          emailVerified: user.emailVerified,
-          mfaEnabled: user.mfaEnabled,
-          lastLogin: user.lastLogin,
-          verificationStatus: user.verificationStatus,
-          // Professional fields (if applicable)
-          specialty: decryptedUser.specialty,
-          medicalLicenseNumber: decryptedUser.medicalLicenseNumber,
-          // Timestamps
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-        patient: decryptedPatient && user.patients ? {
-          id: user.patients.id,
-          gender: user.patients.gender,
-          bloodType: user.patients.bloodType,
-          allergies: user.patients.allergies,
-          chronicConditions: user.patients.chronicConditions,
-          currentMedications: user.patients.currentMedications,
-          addressStreet: decryptedPatient.addressStreet,
-          addressCity: decryptedPatient.addressCity,
-          addressState: decryptedPatient.addressState,
-          addressZip: decryptedPatient.addressZip,
-          addressCountry: decryptedPatient.addressCountry,
-          emergencyName: decryptedPatient.emergencyName,
-          emergencyRelationship: decryptedPatient.emergencyRelationship,
-          emergencyPhone: decryptedPatient.emergencyPhone,
-          gdprConsent: user.patients.gdprConsent,
-          gdprConsentDate: user.patients.gdprConsentDate,
-        } : null,
+    const sensitiveData = {
+      user: {
+        email: decryptedUser.email,
+        firstName: decryptedUser.firstName,
+        lastName: decryptedUser.lastName,
+        dateOfBirth: user.dateOfBirth,
+        role: user.role,
+        permissions,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        mfaEnabled: user.mfaEnabled,
+        lastLogin: user.lastLogin,
+        verificationStatus: user.verificationStatus,
+        // Professional fields (if applicable)
+        specialty: decryptedUser.specialty,
+        medicalLicenseNumber: decryptedUser.medicalLicenseNumber,
+        // Timestamps
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
-    });
+      patient: decryptedPatient && user.patients ? {
+        id: user.patients.id,
+        gender: user.patients.gender,
+        bloodType: user.patients.bloodType,
+        allergies: user.patients.allergies,
+        chronicConditions: user.patients.chronicConditions,
+        currentMedications: user.patients.currentMedications,
+        addressStreet: decryptedPatient.addressStreet,
+        addressCity: decryptedPatient.addressCity,
+        addressState: decryptedPatient.addressState,
+        addressZip: decryptedPatient.addressZip,
+        addressCountry: decryptedPatient.addressCountry,
+        emergencyName: decryptedPatient.emergencyName,
+        emergencyRelationship: decryptedPatient.emergencyRelationship,
+        emergencyPhone: decryptedPatient.emergencyPhone,
+        gdprConsent: user.patients.gdprConsent,
+        gdprConsentDate: user.patients.gdprConsentDate,
+      } : null,
+    };
+
+    // Encrypt the sensitive response data
+    const userAgent = request.headers.get('user-agent') || undefined;
+    
+    try {
+      const encryptedPayload = ClientEncryptionService.encryptPayload(sensitiveData, userAgent);
+      
+      // Return encrypted response - no plain text PII exposed
+      return NextResponse.json({
+        success: true,
+        encrypted: true,
+        encryptedPayload,
+        metadata: {
+          userId: targetUserId,
+          hasPatientData: !!user.patients,
+          timestamp: new Date().toISOString(),
+          encryptionVersion: '1.0'
+        }
+      });
+    } catch (encryptionError) {
+      logger.error('Failed to encrypt profile response:', encryptionError);
+      
+      // TEMPORARY: Return unencrypted data with security warning for debugging
+      logger.warn('🚨 SECURITY WARNING: Sending unencrypted PII data due to encryption failure');
+      return NextResponse.json({
+        success: true,
+        encrypted: false,
+        data: sensitiveData,
+        securityWarning: "Data transmitted unencrypted due to encryption service failure"
+      });
+    }
   } catch (error) {
     logger.error("Profile decryption error:", error);
 

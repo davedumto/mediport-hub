@@ -169,7 +169,7 @@ export async function GET(
     if (appointment.notesEncrypted) {
       try {
         // Helper function to parse encrypted data
-        const parseEncryptedData = (encryptedField: any) => {
+        const parseEncryptedData = (encryptedField: Buffer | string | Uint8Array | unknown) => {
           if (Buffer.isBuffer(encryptedField)) {
             const bufferString = Buffer.from(encryptedField).toString('utf8');
             return JSON.parse(bufferString);

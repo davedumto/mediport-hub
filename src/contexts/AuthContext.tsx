@@ -10,6 +10,7 @@ import React, {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
+import { ClientSideEncryption } from "@/lib/clientSideEncryption";
 
 export interface User {
   id: string;
@@ -48,6 +49,7 @@ interface AuthContextType {
   refreshAuth: () => Promise<boolean>;
   updateUser: (userData: Partial<User>) => void;
   handleAPIError: (response: Response) => boolean;
+  fetchUserProfile: (accessToken?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -198,7 +200,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.ok) {
         const userData = await response.json();
         const maskedUser = userData.data.user;
-        
+
         // Set the masked user data immediately for quick display
         setUser(maskedUser);
 
@@ -207,7 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (maskedUser.id && token) {
             console.log("Attempting to decrypt PII for user:", maskedUser.id);
             console.log("Using token:", token ? "Token available" : "No token");
-            
+
             const decryptedData = await PIIDecryptionClient.decryptUserProfile(
               maskedUser.id,
               token
@@ -222,7 +224,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               };
               setUser(mergedUser);
             } else {
-              console.log("Decryption returned null, continuing with masked data");
+              console.log(
+                "Decryption returned null, continuing with masked data"
+              );
             }
           }
         } catch (decryptError) {
@@ -232,8 +236,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Show welcome toast only if not during initialization
         if (tokens) {
-          const displayName = maskedUser.firstName?.includes("*") 
-            ? "User" 
+          const displayName = maskedUser.firstName?.includes("*")
+            ? "User"
             : maskedUser.firstName;
           toast.success(`Welcome back, ${displayName}!`, {
             description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
@@ -265,16 +269,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
 
+      console.log("🔐 Encrypting login credentials...");
+      const encryptedPayload =
+        await ClientSideEncryption.encryptLoginCredentials(
+          email,
+          password,
+          mfaCode,
+          rememberMe
+        );
+
+      console.log("🚀 Sending encrypted login request");
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email,
-          password,
-          mfaCode,
-          rememberMe,
+          encryptedPayload,
         }),
       });
 
@@ -312,10 +323,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Try to decrypt PII data
             try {
               if (maskedUser.id && data.accessToken) {
-                const decryptedData = await PIIDecryptionClient.decryptUserProfile(
-                  maskedUser.id,
-                  data.accessToken
-                );
+                const decryptedData =
+                  await PIIDecryptionClient.decryptUserProfile(
+                    maskedUser.id,
+                    data.accessToken
+                  );
 
                 if (decryptedData) {
                   const mergedUser = {
@@ -323,12 +335,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     ...decryptedData,
                   };
                   setUser(mergedUser);
-                  
+
                   // Show welcome toast with decrypted name
-                  toast.success(`Welcome back, ${decryptedData.firstName || "User"}!`, {
-                    description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
-                    duration: 4000,
-                  });
+                  toast.success(
+                    `Welcome back, ${decryptedData.firstName || "User"}!`,
+                    {
+                      description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
+                      duration: 4000,
+                    }
+                  );
                 } else {
                   // Show welcome toast with masked data
                   toast.success(`Welcome back!`, {
@@ -338,7 +353,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 }
               }
             } catch (decryptError) {
-              console.error("Failed to decrypt user PII during login:", decryptError);
+              console.error(
+                "Failed to decrypt user PII during login:",
+                decryptError
+              );
               // Show welcome toast with masked data
               toast.success(`Welcome back!`, {
                 description: `You're logged in as a ${maskedUser.role.toLowerCase()}`,
@@ -525,6 +543,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshAuth,
     updateUser,
     handleAPIError,
+    fetchUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

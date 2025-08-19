@@ -140,12 +140,6 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Get role assignment statistics
-    const roleAssignmentStats = await prisma.userRoleAssignment.groupBy({
-      by: ["roleId"],
-      _count: { id: true },
-      where: { revokedAt: null },
-    });
 
     const response = {
       success: true,

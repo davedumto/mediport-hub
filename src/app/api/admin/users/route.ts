@@ -149,15 +149,8 @@ export async function POST(request: NextRequest) {
       password,
       specialty,
       medicalLicenseNumber,
-      department,
-      licenseNumber,
       dateOfBirth,
       gender,
-      phoneNumber,
-      address,
-      yearsOfExperience,
-      education,
-      certifications,
     } = body;
 
     // Validate required fields

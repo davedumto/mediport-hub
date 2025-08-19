@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, generateMFASecret } from "@/lib/auth";
 import { ConsentService } from "@/services/consentService";
@@ -12,16 +11,17 @@ import { AppError, ErrorCodes } from "@/utils/errors";
 import { PIIProtectionService } from "@/services/piiProtectionService";
 import crypto from "crypto";
 
-const doctorRegisterSchema = z.object({
-  fullName: z.string().min(2, "Full name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  specialty: z.string().min(1, "Specialty is required"),
-  medicalLicenseNumber: z.string().min(1, "Medical license number is required"),
-  gdprConsent: z
-    .boolean()
-    .refine((val) => val === true, "GDPR consent is required"),
-});
+// Schema currently unused but available for future validation
+// const doctorRegisterSchema = z.object({
+//   fullName: z.string().min(2, "Full name must be at least 2 characters"),
+//   email: z.string().email("Invalid email address"),
+//   password: z.string().min(8, "Password must be at least 8 characters"),
+//   specialty: z.string().min(1, "Specialty is required"),
+//   medicalLicenseNumber: z.string().min(1, "Medical license number is required"),
+//   gdprConsent: z
+//     .boolean()
+//     .refine((val) => val === true, "GDPR consent is required"),
+// });
 
 export async function POST(request: NextRequest) {
   try {
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create GDPR consent record
-    const consentRecord = await prisma.consentRecord.create({
+    await prisma.consentRecord.create({
       data: {
         userId: user.id,
         consentType: "DATA_PROCESSING",

@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Edit, ChevronLeft, ChevronRight, SquarePen } from "lucide-react";
+import { SquarePen } from "lucide-react";
 import Button from "@/components/common/Button";
 import { Trash } from "iconsax-reactjs";
 

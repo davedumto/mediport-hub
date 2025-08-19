@@ -5,8 +5,6 @@ import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelper
 import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
-import { hasPermission } from "../../../../lib/permissions";
-import { Permission } from "../../../../types/auth";
 
 /**
  * Secure endpoint for decrypting specific PII fields
@@ -61,7 +59,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate entity type
-    const allowedEntityTypes = ["user", "patient", "appointment", "consultation", "medicalRecord"];
+    const allowedEntityTypes = [
+      "user",
+      "patient",
+      "appointment",
+      "consultation",
+      "medicalRecord",
+    ];
     if (!allowedEntityTypes.includes(entityType)) {
       return NextResponse.json(
         {
@@ -74,7 +78,8 @@ export async function POST(request: NextRequest) {
 
     // Check permissions based on entity type and user role
     let hasAccess = false;
-    let entity: any = null;
+    let entity: { id: string; userId?: string | null; [key: string]: unknown } | null =
+      null;
 
     switch (entityType) {
       case "user":
@@ -97,13 +102,19 @@ export async function POST(request: NextRequest) {
         const patient = await prisma.patient.findUnique({
           where: { id: entityId },
         });
-        
+
         if (patient) {
           if (patient.userId === payload.userId) {
             hasAccess = true;
-          } else if (payload.role === "DOCTOR" && patient.assignedProviderId === payload.userId) {
+          } else if (
+            payload.role === "DOCTOR" &&
+            patient.assignedProviderId === payload.userId
+          ) {
             hasAccess = true;
-          } else if (payload.role === "SUPER_ADMIN" || payload.role === "ADMIN") {
+          } else if (
+            payload.role === "SUPER_ADMIN" ||
+            payload.role === "ADMIN"
+          ) {
             hasAccess = true;
           }
           entity = patient;
@@ -119,12 +130,14 @@ export async function POST(request: NextRequest) {
             provider: true,
           },
         });
-        
+
         if (appointment) {
-          if (appointment.providerId === payload.userId || 
-              appointment.patient.userId === payload.userId ||
-              payload.role === "SUPER_ADMIN" || 
-              payload.role === "ADMIN") {
+          if (
+            appointment.providerId === payload.userId ||
+            appointment.patient.userId === payload.userId ||
+            payload.role === "SUPER_ADMIN" ||
+            payload.role === "ADMIN"
+          ) {
             hasAccess = true;
             entity = appointment;
           }
@@ -157,12 +170,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Decrypt requested fields
-    const decryptedData: Record<string, any> = {};
+    const decryptedData: Record<string, string | null> = {};
     const failedFields: string[] = [];
 
     for (const field of fields) {
       const encryptedFieldName = `${field}Encrypted`;
-      
+
       if (entity[encryptedFieldName]) {
         try {
           const encryptedData = entity[encryptedFieldName];
@@ -177,7 +190,7 @@ export async function POST(request: NextRequest) {
               parsed.iv,
               parsed.tag
             );
-          } else if (typeof encryptedData === 'string') {
+          } else if (typeof encryptedData === "string") {
             // If it's a string, parse it as JSON
             const parsed = JSON.parse(encryptedData);
             decryptedValue = PIIProtectionService.decryptField(
@@ -186,11 +199,11 @@ export async function POST(request: NextRequest) {
               parsed.tag
             );
           } else {
-            // Direct object
+            // Direct object  
             decryptedValue = PIIProtectionService.decryptField(
-              encryptedData.encryptedData,
-              encryptedData.iv,
-              encryptedData.tag
+              (encryptedData as any).encryptedData,
+              (encryptedData as any).iv,
+              (encryptedData as any).tag
             );
           }
 
@@ -202,7 +215,7 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Field not encrypted or doesn't exist
-        decryptedData[field] = entity[field] || null;
+        decryptedData[field] = (entity[field] as string) || null;
       }
     }
 
@@ -230,8 +243,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.error("PII decryption error:", error);
 
-    if (error instanceof Error && 
-        (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError")) {
+    if (
+      error instanceof Error &&
+      (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError")
+    ) {
       return NextResponse.json(
         {
           error: "Unauthorized",

@@ -186,8 +186,11 @@ export function calculatePagination(
   };
 }
 
-// Search utilities
-export function createSearchQuery(searchTerm: string, fields: string[]): any {
+// Search utilities  
+export function createSearchQuery(
+  searchTerm: string, 
+  fields: string[]
+): Record<string, any> {
   if (!searchTerm) return {};
 
   const searchConditions = fields.map((field) => ({

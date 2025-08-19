@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, generateMFASecret } from "@/lib/auth";
 import { ConsentService } from "@/services/consentService";
@@ -95,7 +94,7 @@ export async function POST(request: NextRequest) {
     const mfaSecret = generateMFASecret();
 
     // Prepare PII data for encryption (exactly like doctor registration)
-    const { encryptedFields, safeFields } = PIIProtectionService.prepareUserDataForStorage({
+    const { encryptedFields } = PIIProtectionService.prepareUserDataForStorage({
       firstName,
       lastName,
       email,

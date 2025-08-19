@@ -54,14 +54,11 @@ const DoctorTabs = () => {
           return;
         }
 
-        const response = await fetch(
-          "/api/super-admin/doctors",
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`,
-            },
-          }
-        );
+        const response = await fetch("/api/super-admin/doctors", {
+          headers: {
+            Authorization: `Bearer ${tokens.accessToken}`,
+          },
+        });
 
         if (!response.ok) {
           throw new Error("Failed to fetch doctors");
@@ -69,47 +66,52 @@ const DoctorTabs = () => {
 
         const data = await response.json();
         const maskedDoctors = data.data.doctors;
-        
+
         // Decrypt PII data for each doctor
         const decryptedDoctors = await Promise.all(
           maskedDoctors.map(async (doctor: any) => {
             try {
-              const decryptedData = await PIIDecryptionClient.decryptUserProfile(
-                doctor.id,
-                tokens.accessToken
-              );
-              
+              const decryptedData =
+                await PIIDecryptionClient.decryptUserProfile(
+                  doctor.id,
+                  tokens.accessToken
+                );
+
               // Merge masked data with decrypted data
               const mergedDoctor = PIIDecryptionClient.mergeWithDecrypted(
                 doctor,
                 decryptedData
               );
-              
+
               return {
                 ...mergedDoctor,
-                fullName: `${mergedDoctor.firstName || 'Unknown'} ${mergedDoctor.lastName || 'User'}`,
-                isVerified: mergedDoctor.verificationStatus === 'VERIFIED',
+                fullName: `${mergedDoctor.firstName || "Unknown"} ${
+                  mergedDoctor.lastName || "User"
+                }`,
+                isVerified: mergedDoctor.verificationStatus === "VERIFIED",
                 hasMFA: false, // TODO: Add MFA status if available
-                lastLoginFormatted: mergedDoctor.lastLogin 
-                  ? new Date(mergedDoctor.lastLogin).toLocaleDateString() 
-                  : 'Never',
+                lastLoginFormatted: mergedDoctor.lastLogin
+                  ? new Date(mergedDoctor.lastLogin).toLocaleDateString()
+                  : "Never",
               };
             } catch (error) {
               console.warn(`Failed to decrypt doctor ${doctor.id}:`, error);
               // Return doctor with masked data as fallback
               return {
                 ...doctor,
-                fullName: `${doctor.firstName || '[Encrypted]'} ${doctor.lastName || '[Encrypted]'}`,
-                isVerified: doctor.verificationStatus === 'VERIFIED',
+                fullName: `${doctor.firstName || "[Encrypted]"} ${
+                  doctor.lastName || "[Encrypted]"
+                }`,
+                isVerified: doctor.verificationStatus === "VERIFIED",
                 hasMFA: false,
-                lastLoginFormatted: doctor.lastLogin 
-                  ? new Date(doctor.lastLogin).toLocaleDateString() 
-                  : 'Never',
+                lastLoginFormatted: doctor.lastLogin
+                  ? new Date(doctor.lastLogin).toLocaleDateString()
+                  : "Never",
               };
             }
           })
         );
-        
+
         setDoctors(decryptedDoctors);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load doctors");

@@ -39,6 +39,8 @@ model User {
   updatedAt            DateTime             @updatedAt
   createdBy            String?
   updatedBy            String?
+  avatarUrl            String?              // Cloudinary URL for profile picture
+  cloudinaryPublicId   String?              // Cloudinary public ID for avatar management
   verificationStatus   VerificationStatus   @default(PENDING_VERIFICATION)
   appointments         Appointment[]
   auditLogs            AuditLog[]

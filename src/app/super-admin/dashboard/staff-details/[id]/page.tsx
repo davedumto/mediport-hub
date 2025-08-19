@@ -195,11 +195,11 @@ const StaffDetailsPage = () => {
           <div className="flex items-center space-x-4">
             <Avatar className="h-20 w-20">
               <AvatarImage
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${staffDetails.firstName}`}
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${staffDetails.firstName || 'user'}`}
               />
               <AvatarFallback className="bg-blue-100 text-blue-700 text-xl">
-                {staffDetails.firstName[0]}
-                {staffDetails.lastName[0]}
+                {staffDetails.firstName?.[0] || ""}
+                {staffDetails.lastName?.[0] || ""}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">

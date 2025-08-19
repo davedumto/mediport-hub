@@ -120,16 +120,19 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
               <AvatarImage
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${patient.firstName || 'patient'}`}
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${
+                  patient.firstName || "patient"
+                }`}
               />
               <AvatarFallback className="bg-orange-100 text-orange-700">
-                {patient.firstName?.[0] || 'P'}
-                {patient.lastName?.[0] || 'T'}
+                {patient.firstName?.[0] || "P"}
+                {patient.lastName?.[0] || "T"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <CardTitle className="text-lg">
-                {patient.firstName || '[Encrypted]'} {patient.lastName || '[Encrypted]'}
+                {patient.firstName || "[Encrypted]"}{" "}
+                {patient.lastName || "[Encrypted]"}
               </CardTitle>
               <p className="text-sm text-gray-600">
                 {patient.gender ? `${patient.gender} Patient` : "Patient"}

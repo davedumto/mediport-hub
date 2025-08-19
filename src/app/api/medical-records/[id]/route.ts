@@ -9,7 +9,6 @@ import { Permission } from "../../../../types/auth";
 import { updateMedicalRecordSchema } from "../../../../lib/validation";
 import { SanitizationService } from "../../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
-import crypto from "crypto";
 
 export async function GET(
   request: NextRequest,
@@ -172,20 +171,24 @@ export async function GET(
     if (medicalRecord.descriptionEncrypted) {
       try {
         // Helper function to parse encrypted data
-        const parseEncryptedData = (encryptedField: any) => {
+        const parseEncryptedData = (
+          encryptedField: Buffer | null | undefined
+        ) => {
           if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
-          } else if (typeof encryptedField === 'string') {
+          } else if (typeof encryptedField === "string") {
             return JSON.parse(encryptedField);
           } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
           }
           return encryptedField;
         };
 
-        const encryptedData = parseEncryptedData(medicalRecord.descriptionEncrypted);
+        const encryptedData = parseEncryptedData(
+          medicalRecord.descriptionEncrypted
+        );
         decryptedDescription = PIIProtectionService.decryptField(
           encryptedData.encryptedData,
           encryptedData.iv,
@@ -200,20 +203,24 @@ export async function GET(
     if (medicalRecord.findingsEncrypted) {
       try {
         // Helper function to parse encrypted data
-        const parseEncryptedData = (encryptedField: any) => {
+        const parseEncryptedData = (
+          encryptedField: Buffer | null | undefined
+        ) => {
           if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
-          } else if (typeof encryptedField === 'string') {
+          } else if (typeof encryptedField === "string") {
             return JSON.parse(encryptedField);
           } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
           }
           return encryptedField;
         };
 
-        const encryptedData = parseEncryptedData(medicalRecord.findingsEncrypted);
+        const encryptedData = parseEncryptedData(
+          medicalRecord.findingsEncrypted
+        );
         decryptedFindings = PIIProtectionService.decryptField(
           encryptedData.encryptedData,
           encryptedData.iv,
@@ -228,20 +235,24 @@ export async function GET(
     if (medicalRecord.recommendationsEncrypted) {
       try {
         // Helper function to parse encrypted data
-        const parseEncryptedData = (encryptedField: any) => {
+        const parseEncryptedData = (
+          encryptedField: Buffer | null | undefined
+        ) => {
           if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
-          } else if (typeof encryptedField === 'string') {
+          } else if (typeof encryptedField === "string") {
             return JSON.parse(encryptedField);
           } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            const bufferString = Buffer.from(encryptedField).toString("utf8");
             return JSON.parse(bufferString);
           }
           return encryptedField;
         };
 
-        const encryptedData = parseEncryptedData(medicalRecord.recommendationsEncrypted);
+        const encryptedData = parseEncryptedData(
+          medicalRecord.recommendationsEncrypted
+        );
         decryptedRecommendations = PIIProtectionService.decryptField(
           encryptedData.encryptedData,
           encryptedData.iv,
@@ -446,7 +457,20 @@ export async function PUT(
     };
 
     // Prepare update data
-    const updateData: any = {
+    const updateData: {
+      updatedBy: string;
+      recordType?: string;
+      visitDate?: Date;
+      diagnosisEncrypted?: Buffer;
+      treatmentEncrypted?: Buffer;
+      medicationsEncrypted?: Buffer;
+      notesEncrypted?: Buffer;
+      vitalSigns?: Record<string, string | number>;
+      labResults?: Array<Record<string, string | number | boolean>>;
+      imagingResults?: Array<Record<string, string | number | boolean>>;
+      followUpRequired?: boolean;
+      followUpDate?: Date;
+    } = {
       updatedBy: payload.userId,
     };
 

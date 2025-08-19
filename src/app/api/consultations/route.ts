@@ -76,8 +76,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    // eslint-disable-next-line prefer-const
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (patientId) {
       whereClause.patientId = patientId;
@@ -499,23 +498,26 @@ export async function POST(request: NextRequest) {
         endTime: validatedData.endTime,
         durationMinutes,
         chiefComplaintEncrypted: encryptedFields.chiefComplaint
-          ? Buffer.from(JSON.stringify(encryptedFields.chiefComplaint), 'utf8')
+          ? Buffer.from(JSON.stringify(encryptedFields.chiefComplaint), "utf8")
           : null,
         symptomsEncrypted: encryptedFields.symptoms
-          ? Buffer.from(JSON.stringify(encryptedFields.symptoms), 'utf8')
+          ? Buffer.from(JSON.stringify(encryptedFields.symptoms), "utf8")
           : null,
         diagnosisEncrypted: encryptedFields.diagnosis
-          ? Buffer.from(JSON.stringify(encryptedFields.diagnosis), 'utf8')
+          ? Buffer.from(JSON.stringify(encryptedFields.diagnosis), "utf8")
           : null,
         treatmentPlanEncrypted: encryptedFields.treatmentPlan
-          ? Buffer.from(JSON.stringify(encryptedFields.treatmentPlan), 'utf8')
+          ? Buffer.from(JSON.stringify(encryptedFields.treatmentPlan), "utf8")
           : null,
         vitalSigns: validatedData.vitalSigns || {},
         prescriptions: validatedData.prescriptions || [],
         followUpRequired: validatedData.followUpRequired || false,
         followUpDate: validatedData.followUpDate,
         followUpInstructionsEncrypted: encryptedFields.followUpInstructions
-          ? Buffer.from(JSON.stringify(encryptedFields.followUpInstructions), 'utf8')
+          ? Buffer.from(
+              JSON.stringify(encryptedFields.followUpInstructions),
+              "utf8"
+            )
           : null,
         billingCodes: validatedData.billingCodes || [],
         createdBy: payload.userId,

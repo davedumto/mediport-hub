@@ -74,7 +74,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    const whereClause: any = {};
+    const whereClause: {
+      patientId?: string | { in: string[] };
+      recordType?: string;
+      visitDate?: { gte: Date; lte: Date };
+    } = {};
 
     if (patientId) {
       whereClause.patientId = patientId;
