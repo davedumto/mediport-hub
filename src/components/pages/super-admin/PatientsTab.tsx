@@ -5,6 +5,7 @@ import Input from "@/components/common/Input";
 import { Search, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
+import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 type Patient = {
   id: string;
@@ -43,14 +44,11 @@ const PatientsTab = () => {
         setLoading(true);
         console.log("Debug - PatientsTab: Starting to fetch patients");
 
-        const response = await fetch(
-          "/api/superadmin/users?role=PATIENT&limit=100",
-          {
-            headers: {
-              Authorization: `Bearer ${tokens?.accessToken}`,
-            },
-          }
-        );
+        const response = await fetch("/api/super-admin/patients", {
+          headers: {
+            Authorization: `Bearer ${tokens?.accessToken}`,
+          },
+        });
 
         console.log("Debug - PatientsTab: Response status:", response.status);
         console.log("Debug - PatientsTab: Response ok:", response.ok);
@@ -64,11 +62,58 @@ const PatientsTab = () => {
         const data = await response.json();
         console.log("Debug - PatientsTab: Response data:", data);
         console.log(
-          "Debug - PatientsTab: Users found:",
-          data.data?.users?.length || 0
+          "Debug - PatientsTab: Patients found:",
+          data.data?.patients?.length || 0
         );
 
-        setPatients(data.data.users);
+        const maskedPatients = data.data.patients;
+
+        // Decrypt PII data for each patient
+        const decryptedPatients = await Promise.all(
+          maskedPatients.map(async (patient: any) => {
+            try {
+              const decryptedData =
+                await PIIDecryptionClient.decryptUserProfile(
+                  patient.userId, // Use userId for patients
+                  tokens.accessToken
+                );
+
+              // Merge masked data with decrypted data
+              const mergedPatient = PIIDecryptionClient.mergeWithDecrypted(
+                patient,
+                decryptedData
+              );
+
+              return {
+                ...mergedPatient,
+                fullName: `${mergedPatient.firstName || "Unknown"} ${
+                  mergedPatient.lastName || "User"
+                }`,
+                isVerified: mergedPatient.verificationStatus === "VERIFIED",
+                hasMFA: false, // TODO: Add MFA status if available
+                lastLoginFormatted: mergedPatient.lastLogin
+                  ? new Date(mergedPatient.lastLogin).toLocaleDateString()
+                  : "Never",
+              };
+            } catch (error) {
+              console.warn(`Failed to decrypt patient ${patient.id}:`, error);
+              // Return patient with masked data as fallback
+              return {
+                ...patient,
+                fullName: `${patient.firstName || "[Encrypted]"} ${
+                  patient.lastName || "[Encrypted]"
+                }`,
+                isVerified: patient.verificationStatus === "VERIFIED",
+                hasMFA: false,
+                lastLoginFormatted: patient.lastLogin
+                  ? new Date(patient.lastLogin).toLocaleDateString()
+                  : "Never",
+              };
+            }
+          })
+        );
+
+        setPatients(decryptedPatients);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load patients"

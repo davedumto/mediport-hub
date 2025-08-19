@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     let payload;
     try {
       payload = verifyAccessToken(token);
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         {
           error: "Unauthorized",
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
     let payload;
     try {
       payload = verifyAccessToken(token);
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         {
           error: "Unauthorized",

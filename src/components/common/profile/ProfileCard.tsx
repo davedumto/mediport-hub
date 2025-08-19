@@ -6,10 +6,12 @@ import Button from "../Button";
 import { useState } from "react";
 import EditProfileDialog from "../modals/EditProfileModal.component";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfileUpdate } from "@/hooks/useProfileUpdate";
 
 const ProfileCard = () => {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
+  const { updateProfile, isUpdating } = useProfileUpdate();
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -63,7 +65,9 @@ const ProfileCard = () => {
                   height: 100,
                 }}
               >
-                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarImage
+                  src={user.avatarUrl || "https://github.com/shadcn.png"}
+                />
                 <AvatarFallback className="bg-blue-100 text-blue-600 text-2xl font-semibold">
                   {getUserInitials()}
                 </AvatarFallback>
@@ -142,6 +146,25 @@ const ProfileCard = () => {
           email: user.email,
           phone: user.phone,
           gender: user.gender?.toLowerCase() as any,
+          avatarUrl: user.avatarUrl,
+        }}
+        onSave={async (data) => {
+          const profileData = {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone,
+            gender: data.gender?.toUpperCase() as
+              | "MALE"
+              | "FEMALE"
+              | "OTHER"
+              | undefined,
+          };
+
+          const success = await updateProfile(profileData, data.avatarFile);
+          if (success) {
+            setOpen(false);
+          }
         }}
       />
     </>

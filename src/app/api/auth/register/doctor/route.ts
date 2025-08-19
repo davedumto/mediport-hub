@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, generateMFASecret } from "@/lib/auth";
 import { ConsentService } from "@/services/consentService";
@@ -9,21 +8,37 @@ import logger from "@/lib/logger";
 import { emailService } from "@/services/emailService";
 import { extractRequestInfoFromRequest } from "@/utils/appRouterHelpers";
 import { AppError, ErrorCodes } from "@/utils/errors";
+import { PIIProtectionService } from "@/services/piiProtectionService";
 import crypto from "crypto";
 
-const doctorRegisterSchema = z.object({
-  fullName: z.string().min(2, "Full name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  specialty: z.string().min(1, "Specialty is required"),
-  medicalLicenseNumber: z.string().min(1, "Medical license number is required"),
-  gdprConsent: z
-    .boolean()
-    .refine((val) => val === true, "GDPR consent is required"),
-});
+// Schema currently unused but available for future validation
+// const doctorRegisterSchema = z.object({
+//   fullName: z.string().min(2, "Full name must be at least 2 characters"),
+//   email: z.string().email("Invalid email address"),
+//   password: z.string().min(8, "Password must be at least 8 characters"),
+//   specialty: z.string().min(1, "Specialty is required"),
+//   medicalLicenseNumber: z.string().min(1, "Medical license number is required"),
+//   gdprConsent: z
+//     .boolean()
+//     .refine((val) => val === true, "GDPR consent is required"),
+// });
 
 export async function POST(request: NextRequest) {
   try {
+    // Initialize PII protection service with encryption key
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     const body = await request.json();
     const {
       fullName,
@@ -63,6 +78,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate PII data before encryption
+    const piiValidation = PIIProtectionService.validatePIIData({
+      firstName: fullName.split(" ")[0],
+      lastName:
+        fullName.split(" ").slice(1).join(" ") || fullName.split(" ")[0],
+      email,
+      specialty,
+      medicalLicenseNumber,
+    });
+
+    if (!piiValidation.isValid) {
+      throw new AppError(
+        ErrorCodes.VALIDATION_ERROR,
+        "Invalid PII data",
+        400,
+        piiValidation.errors
+      );
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -86,17 +120,55 @@ export async function POST(request: NextRequest) {
     // Generate MFA secret
     const mfaSecret = generateMFASecret();
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
+    // Prepare PII data for encryption
+    const firstName = fullName.split(" ")[0];
+    const lastName =
+      fullName.split(" ").slice(1).join(" ") || fullName.split(" ")[0];
+
+    const { encryptedFields, safeFields } =
+      PIIProtectionService.prepareUserDataForStorage({
+        firstName,
+        lastName,
         email,
-        firstName: fullName.split(" ")[0],
-        lastName:
-          fullName.split(" ").slice(1).join(" ") || fullName.split(" ")[0],
-        passwordHash: hashedPassword,
-        role: "DOCTOR",
         specialty,
         medicalLicenseNumber,
+      });
+
+    // Create user with ONLY encrypted PII fields - no plain text PII stored!
+    const user = await prisma.user.create({
+      data: {
+        // Email is required for unique constraint but we'll also store encrypted version
+        email,  // This is needed for login lookup, but sensitive data is encrypted
+        // DO NOT store plain text PII - only encrypted versions
+        firstName: null,  // Explicitly null - use encrypted version only
+        lastName: null,   // Explicitly null - use encrypted version only
+        specialty: null,  // Explicitly null - use encrypted version only
+        medicalLicenseNumber: null, // Explicitly null - use encrypted version only
+        // Store encrypted PII fields - this is the ONLY place PII is stored
+        firstNameEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.firstName || {}),
+          "utf8"
+        ),
+        lastNameEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.lastName || {}),
+          "utf8"
+        ),
+        emailEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.email || {}),
+          "utf8"
+        ),
+        specialtyEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.specialty || {}),
+          "utf8"
+        ),
+        medicalLicenseNumberEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.medicalLicenseNumber || {}),
+          "utf8"
+        ),
+        // Store safe fields
+        ...safeFields,
+        passwordHash: hashedPassword,
+        role: "DOCTOR",
         verificationStatus: "PENDING_VERIFICATION",
         mfaSecret,
         mfaEnabled: false,
@@ -107,7 +179,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create GDPR consent record
-    const consentRecord = await prisma.consentRecord.create({
+    await prisma.consentRecord.create({
       data: {
         userId: user.id,
         consentType: "DATA_PROCESSING",
@@ -144,7 +216,7 @@ export async function POST(request: NextRequest) {
       // Send verification email
       await emailService.sendVerificationEmail({
         email: user.email,
-        firstName: user.firstName,
+        firstName: user.firstName || "Doctor",
         otp,
         expiresIn: "15 minutes",
       });
@@ -160,9 +232,18 @@ export async function POST(request: NextRequest) {
         success: true,
         changes: {
           action: "Doctor registration",
-          email: user.email,
-          specialty: user.specialty,
-          medicalLicenseNumber: user.medicalLicenseNumber,
+          email: PIIProtectionService.prepareUserDataForResponse(
+            { email: user.email },
+            true
+          ).email,
+          specialty: PIIProtectionService.prepareUserDataForResponse(
+            { specialty: user.specialty },
+            true
+          ).specialty,
+          medicalLicenseNumber: PIIProtectionService.prepareUserDataForResponse(
+            { medicalLicenseNumber: user.medicalLicenseNumber },
+            true
+          ).medicalLicenseNumber,
           verificationEmailSent: true,
           otpGenerated: true,
           expiresAt,
@@ -172,52 +253,43 @@ export async function POST(request: NextRequest) {
         requestId: requestInfo.requestId || crypto.randomUUID(),
       });
 
-      logger.info(`Doctor registration successful for ${user.email}`);
+      logger.info(
+        `Doctor registration successful for ${
+          PIIProtectionService.prepareUserDataForResponse(
+            { email: user.email },
+            true
+          ).email
+        }`
+      );
     } catch (emailError) {
       // Log email failure but don't fail the registration
       logger.warn(
-        `Failed to send verification email to ${user.email}:`,
+        `Failed to send verification email to ${
+          PIIProtectionService.prepareUserDataForResponse(
+            { email: user.email },
+            true
+          ).email
+        }:`,
         emailError
       );
-
-      // Still log the registration success
-      await AuditService.log({
-        userId: user.id,
-        userEmail: user.email,
-        userRole: user.role,
-        action: AuditAction.DATA_CREATED,
-        resource: "User",
-        resourceId: user.id,
-        success: true,
-        changes: {
-          action: "Doctor registration",
-          email: user.email,
-          specialty: user.specialty,
-          medicalLicenseNumber: user.medicalLicenseNumber,
-          verificationEmailSent: false,
-          emailError:
-            emailError instanceof Error ? emailError.message : "Unknown error",
-        },
-        ipAddress: requestInfo.ipAddress,
-        userAgent: requestInfo.userAgent,
-        requestId: requestInfo.requestId || crypto.randomUUID(),
-      });
     }
 
-    // Return success response matching the API specification
+    // Return success response with safe data
+    const safeUserData = PIIProtectionService.prepareUserDataForResponse(
+      user,
+      false
+    );
+
     return NextResponse.json(
       {
         success: true,
         message:
           "Doctor registration successful! Please check your email to verify your account.",
         data: {
-          userId: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          specialty: user.specialty,
-          verificationStatus: user.verificationStatus,
+          userId: safeUserData.id,
+          role: safeUserData.role,
+          verificationStatus: safeUserData.verificationStatus,
+          // No PII data returned for security
         },
       },
       { status: 201 }

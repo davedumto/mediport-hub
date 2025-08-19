@@ -6,9 +6,8 @@ import logger from "../../../../lib/logger";
 import { verifyAccessToken } from "../../../../lib/auth";
 import { hasPermission } from "../../../../lib/permissions";
 import { Permission } from "../../../../types/auth";
-import { updateAppointmentSchema } from "../../../../lib/validation";
 import { SanitizationService } from "../../../../services/sanitizationService";
-import { encryptField, decryptField } from "../../../../lib/encryption";
+import { PIIProtectionService } from "../../../../services/piiProtectionService";
 
 export async function GET(
   request: NextRequest,
@@ -169,11 +168,26 @@ export async function GET(
 
     if (appointment.notesEncrypted) {
       try {
-        // Convert Uint8Array to string before decryption
-        const notesString = Buffer.from(appointment.notesEncrypted).toString(
-          "utf-8"
+        // Helper function to parse encrypted data
+        const parseEncryptedData = (encryptedField: Buffer | string | Uint8Array | unknown) => {
+          if (Buffer.isBuffer(encryptedField)) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          } else if (typeof encryptedField === 'string') {
+            return JSON.parse(encryptedField);
+          } else if (encryptedField instanceof Uint8Array) {
+            const bufferString = Buffer.from(encryptedField).toString('utf8');
+            return JSON.parse(bufferString);
+          }
+          return encryptedField;
+        };
+
+        const encryptedData = parseEncryptedData(appointment.notesEncrypted);
+        decryptedNotes = PIIProtectionService.decryptField(
+          encryptedData.encryptedData,
+          encryptedData.iv,
+          encryptedData.tag
         );
-        decryptedNotes = await decryptField(notesString);
       } catch (error) {
         logger.error("Failed to decrypt notes:", error);
         decryptedNotes = "***DECRYPTION_ERROR***";
@@ -247,6 +261,20 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     const { id: appointmentId } = await params;
 
     // Extract and verify JWT token
@@ -265,14 +293,34 @@ export async function PUT(
     const payload = verifyAccessToken(token);
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Check permissions
+    // Check permissions - only doctors associated with the appointment or admins can update
     const userPermissions = payload.permissions || [];
-    if (
-      !hasPermission(
-        userPermissions as Permission[],
-        Permission.APPOINTMENT_UPDATE
-      )
-    ) {
+    const canUpdateAll = hasPermission(
+      userPermissions as Permission[],
+      Permission.APPOINTMENT_UPDATE_ALL
+    );
+
+    // Get appointment to check ownership
+    const existingAppointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { providerId: true, patientId: true },
+    });
+
+    if (!existingAppointment) {
+      return NextResponse.json(
+        {
+          error: "Not Found",
+          message: "Appointment not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Check if user has permission to update this appointment
+    const canUpdateOwn = payload.userId === existingAppointment.providerId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(payload.role);
+
+    if (!canUpdateAll && !canUpdateOwn && !isAdmin) {
       await AuditService.log({
         userId: payload.userId,
         userEmail: payload.email,
@@ -287,170 +335,158 @@ export async function PUT(
       return NextResponse.json(
         {
           error: "Forbidden",
-          message: "Insufficient permissions to update appointment",
+          message: "Insufficient permissions to update this appointment",
         },
         { status: 403 }
       );
     }
 
-    // Get current appointment for audit
-    const currentAppointment = await prisma.appointment.findUnique({
-      where: { id: appointmentId },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            userId: true,
-            assignedProviderId: true,
-          },
+    // Parse and validate request body
+    const body = await request.json();
+    const { patientId, doctorId, dateTime, purpose, notes, status } = body;
+
+    // Validate required fields
+    if (!patientId || !doctorId || !dateTime || !purpose) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Missing required fields",
+          details: ["patientId, doctorId, dateTime, and purpose are required"],
         },
-      },
+        { status: 400 }
+      );
+    }
+
+    // Validate date format
+    const appointmentDateTime = new Date(dateTime);
+    if (isNaN(appointmentDateTime.getTime())) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Invalid date format",
+          details: ["dateTime must be a valid ISO date string"],
+        },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize input data
+    const sanitizedData = {
+      patientId,
+      providerId: doctorId,
+      startTime: appointmentDateTime,
+      endTime: new Date(appointmentDateTime.getTime() + 30 * 60 * 1000), // Default 30 min duration
+      type: purpose,
+      notes: notes ? SanitizationService.sanitizeMedicalData(notes) : null,
+      status: status || "PENDING",
+    };
+
+    // Verify patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: sanitizedData.patientId },
     });
 
-    if (!currentAppointment) {
+    if (!patient) {
       return NextResponse.json(
         {
           error: "Not Found",
-          message: "Appointment not found",
+          message: "Patient not found",
         },
         { status: 404 }
       );
     }
 
-    // Check if user has access to update this appointment
-    if (payload.role !== "SUPER_ADMIN" && payload.role !== "ADMIN") {
-      if (
-        payload.role === "PATIENT" &&
-        currentAppointment.patient.userId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message: "You can only update your own appointments",
-          },
-          { status: 403 }
-        );
-      }
+    // Verify provider exists and is a healthcare provider
+    const provider = await prisma.user.findUnique({
+      where: { id: sanitizedData.providerId },
+      select: { id: true, role: true, isActive: true },
+    });
 
-      if (
-        payload.role === "NURSE" &&
-        currentAppointment.patient.assignedProviderId !== payload.userId &&
-        currentAppointment.providerId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message:
-              "You can only update appointments for assigned patients or where you are the provider",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (
-        payload.role === "DOCTOR" &&
-        currentAppointment.providerId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message:
-              "You can only update appointments where you are the provider",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Parse and validate request body
-    const body = await request.json();
-    const validatedData = updateAppointmentSchema.parse(body);
-
-    // Sanitize input data
-    const sanitizedData = {
-      ...validatedData,
-      reason: validatedData.reason
-        ? SanitizationService.sanitizeMedicalData(validatedData.reason)
-        : undefined,
-      notes: validatedData.notes
-        ? SanitizationService.sanitizeMedicalData(validatedData.notes)
-        : undefined,
-    };
-
-    // Prepare update data
-    const updateData: any = {
-      updatedBy: payload.userId,
-    };
-
-    if (sanitizedData.startTime !== undefined)
-      updateData.startTime = sanitizedData.startTime;
-    if (sanitizedData.endTime !== undefined)
-      updateData.endTime = sanitizedData.endTime;
-
-    if (sanitizedData.type !== undefined) updateData.type = sanitizedData.type;
-
-    if (sanitizedData.reason !== undefined)
-      updateData.reason = sanitizedData.reason;
-    if (sanitizedData.priority !== undefined)
-      updateData.priority = sanitizedData.priority;
-    if (sanitizedData.locationType !== undefined)
-      updateData.locationType = sanitizedData.locationType;
-
-    // Encrypt sensitive fields if provided
-    if (sanitizedData.notes !== undefined) {
-      updateData.notesEncrypted = sanitizedData.notes
-        ? await encryptField(sanitizedData.notes)
-        : null;
-    }
-
-    // Check for scheduling conflicts if time is being changed
-    if (sanitizedData.startTime || sanitizedData.endTime) {
-      const startTime = sanitizedData.startTime || currentAppointment.startTime;
-      const endTime = sanitizedData.endTime || currentAppointment.endTime;
-
-      const conflictingAppointment = await prisma.appointment.findFirst({
-        where: {
-          id: { not: appointmentId },
-          providerId: currentAppointment.providerId,
-          status: { in: ["SCHEDULED", "CONFIRMED"] },
-          OR: [
-            {
-              startTime: { lt: endTime },
-              endTime: { gt: startTime },
-            },
-          ],
+    if (!provider || !provider.isActive) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Invalid or inactive provider",
         },
-      });
-
-      if (conflictingAppointment) {
-        return NextResponse.json(
-          {
-            error: "Conflict",
-            message: "Provider has a conflicting appointment at this time",
-            details: ["Please choose a different time"],
-          },
-          { status: 409 }
-        );
-      }
+        { status: 400 }
+      );
     }
+
+    if (!["DOCTOR", "NURSE"].includes(provider.role)) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Provider must be a healthcare professional",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check for scheduling conflicts (excluding current appointment)
+    const conflictingAppointment = await prisma.appointment.findFirst({
+      where: {
+        id: { not: appointmentId },
+        providerId: sanitizedData.providerId,
+        status: { in: ["SCHEDULED", "CONFIRMED"] },
+        OR: [
+          {
+            startTime: { lt: sanitizedData.endTime },
+            endTime: { gt: sanitizedData.startTime },
+          },
+        ],
+      },
+    });
+
+    if (conflictingAppointment) {
+      return NextResponse.json(
+        {
+          error: "Conflict",
+          message: "Provider has a conflicting appointment at this time",
+          details: ["Please choose a different time or provider"],
+        },
+        { status: 409 }
+      );
+    }
+
+    // Encrypt sensitive fields
+    const encryptedNotes = sanitizedData.notes
+      ? PIIProtectionService.encryptField(sanitizedData.notes)
+      : null;
 
     // Update appointment
     const updatedAppointment = await prisma.appointment.update({
       where: { id: appointmentId },
-      data: updateData,
+      data: {
+        patientId: sanitizedData.patientId,
+        providerId: sanitizedData.providerId,
+        startTime: sanitizedData.startTime,
+        endTime: sanitizedData.endTime,
+        type: sanitizedData.type,
+        status: sanitizedData.status,
+        notesEncrypted: encryptedNotes
+          ? Buffer.from(JSON.stringify(encryptedNotes), 'utf8')
+          : null,
+        updatedBy: payload.userId,
+        updatedAt: new Date(),
+      },
       include: {
         patient: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            user: {
+              select: {
+                id: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+              },
+            },
           },
         },
         provider: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            firstNameEncrypted: true,
+            lastNameEncrypted: true,
             role: true,
           },
         },
@@ -465,34 +501,35 @@ export async function PUT(
       resource: "appointments",
       resourceId: appointmentId,
       success: true,
-      oldValues: currentAppointment,
-      newValues: updatedAppointment,
-      changes: sanitizedData,
+      changes: {
+        patientId: sanitizedData.patientId,
+        providerId: sanitizedData.providerId,
+        startTime: sanitizedData.startTime,
+        endTime: sanitizedData.endTime,
+        type: sanitizedData.type,
+        status: sanitizedData.status,
+      },
       ...requestInfo,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Appointment updated successfully",
-      data: {
-        id: updatedAppointment.id,
-        patientId: updatedAppointment.patientId,
-        providerId: updatedAppointment.providerId,
-        startTime: updatedAppointment.startTime,
-        endTime: updatedAppointment.endTime,
-        timezone: updatedAppointment.timezone,
-        type: updatedAppointment.type,
-        status: updatedAppointment.status,
-        reason: updatedAppointment.reason,
-        priority: updatedAppointment.priority,
-        locationType: updatedAppointment.locationType,
-        roomNumber: updatedAppointment.roomNumber,
-        virtualMeetingUrl: updatedAppointment.virtualMeetingUrl,
-        patient: updatedAppointment.patient,
-        provider: updatedAppointment.provider,
-        updatedAt: updatedAppointment.updatedAt,
+    // Return response according to the new convention
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Appointment updated successfully",
+        data: {
+          appointmentId: updatedAppointment.id,
+          patientId: updatedAppointment.patientId,
+          doctorId: updatedAppointment.providerId,
+          dateTime: updatedAppointment.startTime.toISOString(),
+          purpose: updatedAppointment.type,
+          notes: sanitizedData.notes || "",
+          status: updatedAppointment.status,
+          updatedAt: updatedAppointment.updatedAt,
+        },
       },
-    });
+      { status: 200 }
+    );
   } catch (error) {
     logger.error("Update appointment error:", error);
 
@@ -509,27 +546,11 @@ export async function PUT(
       );
     }
 
-    if (
-      error instanceof Error &&
-      error.name === "ZodError" &&
-      "errors" in error
-    ) {
-      return NextResponse.json(
-        {
-          error: "Bad Request",
-          message: "Validation error",
-          details: (error as any).errors.map(
-            (e: any) => `${e.path.join(".")}: ${e.message}`
-          ),
-        },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       {
         error: "Internal Server Error",
         message: "An unexpected error occurred",
+        details: ["Please try again later"],
       },
       { status: 500 }
     );
@@ -559,14 +580,34 @@ export async function DELETE(
     const payload = verifyAccessToken(token);
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Check permissions
+    // Check permissions - only doctors associated with the appointment or admins can delete
     const userPermissions = payload.permissions || [];
-    if (
-      !hasPermission(
-        userPermissions as Permission[],
-        Permission.APPOINTMENT_DELETE
-      )
-    ) {
+    const canDeleteAll = hasPermission(
+      userPermissions as Permission[],
+      Permission.APPOINTMENT_DELETE_ALL
+    );
+
+    // Get appointment to check ownership
+    const existingAppointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { providerId: true, status: true },
+    });
+
+    if (!existingAppointment) {
+      return NextResponse.json(
+        {
+          error: "Not Found",
+          message: "Appointment not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Check if user has permission to delete this appointment
+    const canDeleteOwn = payload.userId === existingAppointment.providerId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(payload.role);
+
+    if (!canDeleteAll && !canDeleteOwn && !isAdmin) {
       await AuditService.log({
         userId: payload.userId,
         userEmail: payload.email,
@@ -581,100 +622,41 @@ export async function DELETE(
       return NextResponse.json(
         {
           error: "Forbidden",
-          message: "Insufficient permissions to delete appointment",
+          message: "Insufficient permissions to delete this appointment",
         },
         { status: 403 }
       );
     }
 
-    // Get current appointment for audit
-    const currentAppointment = await prisma.appointment.findUnique({
-      where: { id: appointmentId },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            userId: true,
-            assignedProviderId: true,
-          },
-        },
-      },
-    });
-
-    if (!currentAppointment) {
-      return NextResponse.json(
-        {
-          error: "Not Found",
-          message: "Appointment not found",
-        },
-        { status: 404 }
-      );
-    }
-
-    // Check if user has access to delete this appointment
-    if (payload.role !== "SUPER_ADMIN" && payload.role !== "ADMIN") {
-      if (
-        payload.role === "PATIENT" &&
-        currentAppointment.patient.userId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message: "You can only delete your own appointments",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (
-        payload.role === "NURSE" &&
-        currentAppointment.patient.assignedProviderId !== payload.userId &&
-        currentAppointment.providerId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message:
-              "You can only delete appointments for assigned patients or where you are the provider",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (
-        payload.role === "DOCTOR" &&
-        currentAppointment.providerId !== payload.userId
-      ) {
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message:
-              "You can only delete appointments where you are the provider",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Check if appointment can be cancelled (not completed or already cancelled)
-    if (["COMPLETED", "CANCELLED"].includes(currentAppointment.status)) {
+    // Check if appointment can be deleted (not already cancelled/completed)
+    if (["CANCELLED", "COMPLETED"].includes(existingAppointment.status)) {
       return NextResponse.json(
         {
           error: "Bad Request",
-          message:
-            "Cannot delete appointment with status: " +
-            currentAppointment.status,
+          message: "Cannot delete appointment with current status",
+          details: [`Appointment status is ${existingAppointment.status}`],
         },
         { status: 400 }
       );
     }
 
-    // Soft delete by changing status to CANCELLED
+    // Soft delete the appointment by updating status and adding deletion metadata
     const deletedAppointment = await prisma.appointment.update({
       where: { id: appointmentId },
       data: {
         status: "CANCELLED",
         updatedBy: payload.userId,
+        updatedAt: new Date(),
+        // Add deletion metadata for audit trail
+        notesEncrypted: Buffer.from(
+          JSON.stringify({
+            deletedAt: new Date().toISOString(),
+            deletedBy: payload.userId,
+            originalStatus: existingAppointment.status,
+            deletionReason: "Soft deleted by user",
+          }),
+          'utf8'
+        ),
       },
     });
 
@@ -686,24 +668,27 @@ export async function DELETE(
       resource: "appointments",
       resourceId: appointmentId,
       success: true,
-      oldValues: currentAppointment,
-      newValues: deletedAppointment,
       changes: {
         status: "CANCELLED",
-        deletedAt: new Date(),
+        deletedAt: new Date().toISOString(),
+        deletionReason: "Soft deleted by user",
       },
       ...requestInfo,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Appointment cancelled successfully",
-      data: {
-        id: deletedAppointment.id,
-        status: deletedAppointment.status,
-        cancelledAt: new Date().toISOString(),
+    // Return success response
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Appointment deleted successfully",
+        data: {
+          appointmentId: deletedAppointment.id,
+          status: deletedAppointment.status,
+          deletedAt: deletedAppointment.updatedAt,
+        },
       },
-    });
+      { status: 200 }
+    );
   } catch (error) {
     logger.error("Delete appointment error:", error);
 
@@ -724,6 +709,7 @@ export async function DELETE(
       {
         error: "Internal Server Error",
         message: "An unexpected error occurred",
+        details: ["Please try again later"],
       },
       { status: 500 }
     );

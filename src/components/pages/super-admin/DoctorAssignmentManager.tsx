@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, UserPlus, UserMinus, Users, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 interface Doctor {
   id: string;
@@ -90,13 +91,37 @@ const DoctorAssignmentManager = () => {
       };
 
       // Fetch doctors
-      const doctorsResponse = await fetch("/api/superadmin/users?role=DOCTOR", {
+      const doctorsResponse = await fetch("/api/super-admin/doctors", {
         headers,
       });
       if (doctorsResponse.ok) {
         const doctorsData = await doctorsResponse.json();
         console.log("Doctors data:", doctorsData);
-        setDoctors(doctorsData.data?.users || []);
+        const maskedDoctors = doctorsData.data?.doctors || [];
+
+        // Decrypt PII data for each doctor
+        const decryptedDoctors = await Promise.all(
+          maskedDoctors.map(async (doctor: any) => {
+            try {
+              const decryptedData =
+                await PIIDecryptionClient.decryptUserProfile(
+                  doctor.id,
+                  accessToken
+                );
+
+              // Merge masked data with decrypted data
+              return PIIDecryptionClient.mergeWithDecrypted(
+                doctor,
+                decryptedData
+              );
+            } catch (error) {
+              console.warn(`Failed to decrypt doctor ${doctor.id}:`, error);
+              return doctor; // Return masked data as fallback
+            }
+          })
+        );
+
+        setDoctors(decryptedDoctors);
       } else {
         console.error(
           "Failed to fetch doctors:",
@@ -108,16 +133,37 @@ const DoctorAssignmentManager = () => {
       }
 
       // Fetch patients
-      const patientsResponse = await fetch(
-        "/api/superadmin/users?role=PATIENT",
-        {
-          headers,
-        }
-      );
+      const patientsResponse = await fetch("/api/super-admin/patients", {
+        headers,
+      });
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
         console.log("Patients data:", patientsData);
-        setPatients(patientsData.data?.users || []);
+        const maskedPatients = patientsData.data?.patients || [];
+
+        // Decrypt PII data for each patient
+        const decryptedPatients = await Promise.all(
+          maskedPatients.map(async (patient: any) => {
+            try {
+              const decryptedData =
+                await PIIDecryptionClient.decryptUserProfile(
+                  patient.userId, // Use userId for patients
+                  accessToken
+                );
+
+              // Merge masked data with decrypted data
+              return PIIDecryptionClient.mergeWithDecrypted(
+                patient,
+                decryptedData
+              );
+            } catch (error) {
+              console.warn(`Failed to decrypt patient ${patient.id}:`, error);
+              return patient; // Return masked data as fallback
+            }
+          })
+        );
+
+        setPatients(decryptedPatients);
       } else {
         console.error(
           "Failed to fetch patients:",
@@ -295,16 +341,16 @@ const DoctorAssignmentManager = () => {
 
   const filteredAssignments = assignments.filter((assignment) => {
     const matchesSearch =
-      assignment.doctor.firstName
+      (assignment.doctor.firstName || "")
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
-      assignment.doctor.lastName
+      (assignment.doctor.lastName || "")
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
-      assignment.patient.firstName
+      (assignment.patient.firstName || "")
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
-      assignment.patient.lastName
+      (assignment.patient.lastName || "")
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
 

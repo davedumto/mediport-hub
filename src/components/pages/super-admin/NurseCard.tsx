@@ -114,16 +114,16 @@ const NurseCard: React.FC<NurseCardProps> = ({
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
               <AvatarImage
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${nurse.firstName}`}
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${nurse.firstName || "nurse"}`}
               />
               <AvatarFallback className="bg-green-100 text-green-700">
-                {nurse.firstName[0]}
-                {nurse.lastName[0]}
+                {nurse.firstName?.[0] || "N"}
+                {nurse.lastName?.[0] || ""}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <CardTitle className="text-lg">
-                {nurse.firstName} {nurse.lastName}
+                {nurse.firstName || "[Encrypted]"} {nurse.lastName || "[Encrypted]"}
               </CardTitle>
               <p className="text-sm text-gray-600">
                 {nurse.specialty || "General Nursing"}
@@ -203,7 +203,7 @@ const NurseCard: React.FC<NurseCardProps> = ({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Change Role for Nurse {nurse.firstName} {nurse.lastName}
+              Change Role for Nurse {nurse.firstName || "[Encrypted]"} {nurse.lastName || "[Encrypted]"}
             </DialogTitle>
             <DialogDescription>
               Current role:{" "}

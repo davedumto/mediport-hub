@@ -33,14 +33,6 @@ const AppointmentItem: FC<AppointmentItemProps> = ({ appointment }) => {
     });
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -111,7 +103,7 @@ const AppointmentItem: FC<AppointmentItemProps> = ({ appointment }) => {
         </div>
 
         {appointment.reason && (
-          <p className="text-sm text-gray-600 italic">"{appointment.reason}"</p>
+          <p className="text-sm text-gray-600 italic">&quot;{appointment.reason}&quot;</p>
         )}
       </div>
 

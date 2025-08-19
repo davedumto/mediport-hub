@@ -116,16 +116,19 @@ const DoctorCard: React.FC<DoctorCardProps> = ({
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
               <AvatarImage
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doctor.firstName}`}
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${
+                  doctor.firstName || "doctor"
+                }`}
               />
               <AvatarFallback className="bg-blue-100 text-blue-700">
-                {doctor.firstName[0]}
-                {doctor.lastName[0]}
+                {doctor.firstName?.[0] || "D"}
+                {doctor.lastName?.[0] || "R"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <CardTitle className="text-lg">
-                {doctor.firstName} {doctor.lastName}
+                {doctor.firstName || "[Encrypted]"}{" "}
+                {doctor.lastName || "[Encrypted]"}
               </CardTitle>
               <p className="text-sm text-gray-600">
                 {doctor.specialty || "General Medicine"}

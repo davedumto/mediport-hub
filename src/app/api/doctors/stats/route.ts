@@ -5,6 +5,7 @@ import { AuditService, AuditAction } from "../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 
 export async function GET(request: NextRequest) {
+  let payload: any = null;
   try {
     // Extract and verify JWT token
     const authHeader = request.headers.get("authorization");
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
-    const payload = verifyAccessToken(token);
+    payload = verifyAccessToken(token);
     const requestInfo = extractRequestInfoFromRequest(request);
 
     // Check if user is a doctor
