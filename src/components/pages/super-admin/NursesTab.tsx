@@ -5,6 +5,7 @@ import Input from "@/components/common/Input";
 import { Search, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
+import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 interface Nurse {
   id: string;
@@ -55,7 +56,53 @@ const NursesTab = () => {
         }
 
         const data = await response.json();
-        setNurses(data.data.users);
+        const maskedNurses = data.data.users;
+
+        // Decrypt PII data for each nurse
+        const decryptedNurses = await Promise.all(
+          maskedNurses.map(async (nurse: any) => {
+            try {
+              const decryptedData = await PIIDecryptionClient.decryptUserProfile(
+                nurse.id,
+                tokens.accessToken
+              );
+
+              // Merge masked data with decrypted data
+              const mergedNurse = PIIDecryptionClient.mergeWithDecrypted(
+                nurse,
+                decryptedData
+              );
+
+              return {
+                ...mergedNurse,
+                fullName: `${mergedNurse.firstName || "Unknown"} ${
+                  mergedNurse.lastName || "User"
+                }`,
+                isVerified: mergedNurse.verificationStatus === "VERIFIED",
+                hasMFA: false, // TODO: Add MFA status if available
+                lastLoginFormatted: mergedNurse.lastLogin
+                  ? new Date(mergedNurse.lastLogin).toLocaleDateString()
+                  : "Never",
+              };
+            } catch (error) {
+              console.warn(`Failed to decrypt nurse ${nurse.id}:`, error);
+              // Return nurse with masked data as fallback
+              return {
+                ...nurse,
+                fullName: `${nurse.firstName || "[Encrypted]"} ${
+                  nurse.lastName || "[Encrypted]"
+                }`,
+                isVerified: nurse.verificationStatus === "VERIFIED",
+                hasMFA: false,
+                lastLoginFormatted: nurse.lastLogin
+                  ? new Date(nurse.lastLogin).toLocaleDateString()
+                  : "Never",
+              };
+            }
+          })
+        );
+
+        setNurses(decryptedNurses);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load nurses");
         console.error("Error fetching nurses:", err);

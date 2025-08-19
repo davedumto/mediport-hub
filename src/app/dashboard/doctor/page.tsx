@@ -1,18 +1,20 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DashboardStatsSection from "@/components/pages/dashboard/DashboardStats";
 import CalendarSection from "@/components/pages/dashboard/CalendarSection";
 import FeedbackSection from "@/components/pages/dashboard/doctor/FeedbackSection";
 import RouteGuard from "@/components/common/RouteGuard";
+import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
 
 const DoctorDashboard = () => {
-  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, tokens, isAuthenticated, logout, updateUser } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({});
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isDecrypting, setIsDecrypting] = useState(false);
 
   // Generate calendar weeks for the current month
   const generateCalendarWeeks = (date: Date) => {
@@ -54,13 +56,42 @@ const DoctorDashboard = () => {
 
   const weeks = generateCalendarWeeks(currentMonth);
 
+  // Decrypt user PII when component mounts
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    const decryptUserData = async () => {
+      if (!user?.id || !tokens?.accessToken) return;
+      
+      // Check if we already have decrypted data
+      if (user.firstName && !user.firstName.includes("*")) {
+        return; // Already decrypted
+      }
 
-    fetchDoctorData();
-  }, [isAuthenticated, user]);
+      setIsDecrypting(true);
+      try {
+        const decryptedData = await PIIDecryptionClient.decryptUserProfile(
+          user.id,
+          tokens.accessToken
+        );
 
-  const fetchDoctorData = async () => {
+        if (decryptedData) {
+          // Merge decrypted data with existing user data
+          const mergedUser = {
+            ...user,
+            ...decryptedData,
+          };
+          updateUser(mergedUser);
+        }
+      } catch (error) {
+        console.error("Failed to decrypt user data:", error);
+      } finally {
+        setIsDecrypting(false);
+      }
+    };
+
+    decryptUserData();
+  }, [user?.id, user, tokens?.accessToken, updateUser]);
+
+  const fetchDoctorData = useCallback(async () => {
     if (!user?.id) return;
 
     setIsLoadingAppointments(true);
@@ -129,7 +160,13 @@ const DoctorDashboard = () => {
 
     // Debug: Log the current appointments state
     console.log("Current appointments state:", appointments);
-  };
+  }, [user?.id, currentMonth]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    fetchDoctorData();
+  }, [isAuthenticated, user, fetchDoctorData]);
 
   return (
     <RouteGuard requiredRole="DOCTOR">
@@ -139,7 +176,11 @@ const DoctorDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Dr. {user?.firstName} {user?.lastName}
+                {isDecrypting ? (
+                  <span className="animate-pulse">Loading...</span>
+                ) : (
+                  <>Dr. {user?.firstName} {user?.lastName}</>
+                )}
               </h2>
               <p className="text-gray-600 mt-1">
                 {user?.specialty
@@ -157,6 +198,16 @@ const DoctorDashboard = () => {
                   ? "✅ Verified"
                   : "⏳ Pending Verification"}
               </p>
+              {user?.email && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Email: {user.email}
+                </p>
+              )}
+              {user?.phone && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Phone: {user.phone}
+                </p>
+              )}
             </div>
             <div className="text-right flex flex-col items-end gap-3">
               <div>

@@ -11,13 +11,66 @@ import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
 import { getRolePermissions } from "../../../../lib/permissions";
+import { PIIProtectionService } from "../../../../services/piiProtectionService";
+import { ClientEncryptionService } from "../../../../services/clientEncryptionService";
 
 // Ensure this route is properly exported for Vercel
 export async function POST(request: NextRequest) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     // Parse request body
     const body = await request.json();
-    const { email, password, mfaCode, rememberMe } = body;
+    let email: string,
+      password: string,
+      mfaCode: string | undefined,
+      rememberMe: boolean;
+
+    // Check if the request contains encrypted payload
+    if (ClientEncryptionService.isEncryptedPayload(body)) {
+      console.log("🔓 Decrypting login payload...");
+      try {
+        const userAgent = request.headers.get("user-agent") || undefined;
+        const decryptedCredentials =
+          ClientEncryptionService.decryptLoginCredentials(
+            body.encryptedPayload,
+            userAgent
+          );
+
+        email = decryptedCredentials.email;
+        password = decryptedCredentials.password;
+        mfaCode = decryptedCredentials.mfaCode;
+        rememberMe = decryptedCredentials.rememberMe || false;
+
+        console.log("✅ Successfully decrypted login credentials");
+      } catch (error) {
+        console.error("❌ Failed to decrypt login payload:", error);
+        return NextResponse.json(
+          {
+            error: "Bad Request",
+            message: "Invalid encrypted payload",
+            details: ["Failed to decrypt login credentials"],
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Legacy support for unencrypted payloads (will be removed in future)
+      console.log("⚠️ Received unencrypted login payload (legacy mode)");
+      ({ email, password, mfaCode, rememberMe } = body);
+    }
 
     // Simple validation
     if (!email || !password) {
@@ -34,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Extract request info for audit
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Fetch user with roles
+    // Fetch user with roles and encrypted fields
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -104,7 +157,7 @@ export async function POST(request: NextRequest) {
         data: {
           failedLoginAttempts: failedAttempts,
           lockedUntil: shouldLock
-            ? new Date(Date.now() + 30 * 60 * 1000)
+            ? new Date(Date.now() + 30 * 60 * 60 * 1000) // 30 minutes
             : null,
         },
       });
@@ -211,10 +264,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Log successful login
+    // Log successful login with safe PII data
     await AuditService.logLoginSuccess(
       user.id,
-      user.email,
+      PIIProtectionService.prepareUserDataForResponse(
+        { email: user.email },
+        true
+      ).email,
       user.role,
       session.id,
       requestInfo,
@@ -233,6 +289,7 @@ export async function POST(request: NextRequest) {
       path: "/",
     };
 
+    // Prepare safe user data for response - ONLY return minimal required data
     const response = NextResponse.json(
       {
         message: "Login successful.",
@@ -240,8 +297,12 @@ export async function POST(request: NextRequest) {
         refreshToken: tokens.refreshToken,
         user: {
           id: user.id,
-          role: user.role, // Return the exact role value, not lowercase
+          role: user.role,
           status: user.isActive ? "active" : "inactive",
+          emailVerified: user.emailVerified,
+          mfaEnabled: user.mfaEnabled,
+          // NO PII data - no names, emails, phone numbers, etc.
+          // Frontend should call /api/auth/profile with proper decryption if needed
         },
       },
       { status: 200 }

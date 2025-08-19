@@ -66,7 +66,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause
-    const whereClause: any = {};
+    const whereClause: {
+      type?: string;
+      resolved?: boolean;
+    } = {};
 
     if (type) {
       whereClause.type = type;
@@ -213,9 +216,9 @@ export async function POST(request: NextRequest) {
     const feedback = await prisma.feedback.create({
       data: {
         userId: payload.userId,
-        type: validatedData.type,
-        title: validatedData.title,
-        description: validatedData.description,
+        type: sanitizedData.type,
+        title: sanitizedData.title,
+        description: sanitizedData.description,
         priority: validatedData.priority || "MEDIUM",
         category: validatedData.category || "GENERAL",
         status: "PENDING",

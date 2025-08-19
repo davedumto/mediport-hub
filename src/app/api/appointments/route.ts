@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "../../../lib/db";
-import { AuditService, AuditAction } from "../../../lib/audit";
-import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
-import logger from "../../../lib/logger";
 import { verifyAccessToken } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { AuditService, AuditAction } from "../../../lib/audit";
+import logger from "../../../lib/logger";
+import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
 import { hasPermission } from "../../../lib/permissions";
 import { Permission } from "../../../types/auth";
-import { createAppointmentSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
-import { encryptField } from "../../../lib/encryption";
+import { PIIProtectionService } from "../../../services/piiProtectionService";
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,7 +74,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    const whereClause: any = {};
+    const whereClause: Record<string, unknown> = {};
 
     if (patientId) {
       whereClause.patientId = patientId;
@@ -96,10 +95,10 @@ export async function GET(request: NextRequest) {
     if (startDate || endDate) {
       whereClause.startTime = {};
       if (startDate) {
-        whereClause.startTime.gte = new Date(startDate);
+        (whereClause.startTime as any).gte = new Date(startDate);
       }
       if (endDate) {
-        whereClause.startTime.lte = new Date(endDate);
+        (whereClause.startTime as any).lte = new Date(endDate);
       }
     }
 
@@ -227,6 +226,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     // Extract and verify JWT token
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -243,13 +256,14 @@ export async function POST(request: NextRequest) {
     const payload = verifyAccessToken(token);
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Check permissions
+    // Check permissions - only doctors and admins can create appointments
     const userPermissions = payload.permissions || [];
     if (
       !hasPermission(
         userPermissions as Permission[],
         Permission.APPOINTMENT_CREATE
-      )
+      ) &&
+      !["DOCTOR", "ADMIN", "SUPER_ADMIN"].includes(payload.role)
     ) {
       await AuditService.log({
         userId: payload.userId,
@@ -272,22 +286,48 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    const validatedData = createAppointmentSchema.parse(body);
+
+    // Validate required fields according to the new convention
+    const { patientId, doctorId, dateTime, purpose, notes, status } = body;
+
+    if (!patientId || !doctorId || !dateTime || !purpose) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Missing required fields",
+          details: ["patientId, doctorId, dateTime, and purpose are required"],
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate date format
+    const appointmentDateTime = new Date(dateTime);
+    if (isNaN(appointmentDateTime.getTime())) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          message: "Invalid date format",
+          details: ["dateTime must be a valid ISO date string"],
+        },
+        { status: 400 }
+      );
+    }
 
     // Sanitize input data
     const sanitizedData = {
-      ...validatedData,
-      reason: validatedData.reason
-        ? SanitizationService.sanitizeMedicalData(validatedData.reason)
-        : null,
-      notes: validatedData.notes
-        ? SanitizationService.sanitizeMedicalData(validatedData.notes)
-        : null,
+      patientId,
+      providerId: doctorId, // Map doctorId to providerId for database
+      startTime: appointmentDateTime,
+      endTime: new Date(appointmentDateTime.getTime() + 30 * 60 * 1000), // Default 30 min duration
+      type: purpose,
+      notes: notes ? SanitizationService.sanitizeMedicalData(notes) : null,
+      status: status || "PENDING",
     };
 
     // Verify patient exists and user has access
     const patient = await prisma.patient.findUnique({
-      where: { id: validatedData.patientId },
+      where: { id: sanitizedData.patientId },
       include: { assignedProvider: true },
     });
 
@@ -329,7 +369,7 @@ export async function POST(request: NextRequest) {
 
     // Verify provider exists and is a healthcare provider
     const provider = await prisma.user.findUnique({
-      where: { id: validatedData.providerId },
+      where: { id: sanitizedData.providerId },
       select: { id: true, role: true, isActive: true },
     });
 
@@ -356,12 +396,12 @@ export async function POST(request: NextRequest) {
     // Check for scheduling conflicts
     const conflictingAppointment = await prisma.appointment.findFirst({
       where: {
-        providerId: validatedData.providerId,
+        providerId: sanitizedData.providerId,
         status: { in: ["SCHEDULED", "CONFIRMED"] },
         OR: [
           {
-            startTime: { lt: validatedData.endTime },
-            endTime: { gt: validatedData.startTime },
+            startTime: { lt: sanitizedData.endTime },
+            endTime: { gt: sanitizedData.startTime },
           },
         ],
       },
@@ -379,31 +419,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt sensitive fields
-    const encryptedData = {
-      ...sanitizedData,
-      notesEncrypted: sanitizedData.notes
-        ? await encryptField(sanitizedData.notes)
-        : null,
-    };
+    const encryptedNotes = sanitizedData.notes
+      ? PIIProtectionService.encryptField(sanitizedData.notes)
+      : null;
+
+    // Generate appointment ID
+    const appointmentId = `A-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 4)
+      .toUpperCase()}`;
 
     // Create appointment
     const appointment = await prisma.appointment.create({
       data: {
-        patientId: validatedData.patientId,
-        providerId: validatedData.providerId,
-        startTime: validatedData.startTime,
-        endTime: validatedData.endTime,
-
-        type: validatedData.type,
-        reason: validatedData.reason,
-        priority: validatedData.priority || "NORMAL",
-        notesEncrypted: encryptedData.notesEncrypted
-          ? Buffer.from(encryptedData.notesEncrypted, "utf-8")
+        id: appointmentId,
+        patientId: sanitizedData.patientId,
+        providerId: sanitizedData.providerId,
+        startTime: sanitizedData.startTime,
+        endTime: sanitizedData.endTime,
+        type: sanitizedData.type,
+        status: sanitizedData.status,
+        notesEncrypted: encryptedNotes
+          ? Buffer.from(JSON.stringify(encryptedNotes), "utf8")
           : null,
+        priority: "NORMAL",
         reminderSent: false,
         confirmationSent: false,
-        locationType: validatedData.locationType || "IN_PERSON",
-
+        locationType: "IN_PERSON",
         createdBy: payload.userId,
         updatedBy: payload.userId,
       },
@@ -411,15 +453,20 @@ export async function POST(request: NextRequest) {
         patient: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            user: {
+              select: {
+                id: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+              },
+            },
           },
         },
         provider: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            firstNameEncrypted: true,
+            lastNameEncrypted: true,
             role: true,
           },
         },
@@ -435,31 +482,29 @@ export async function POST(request: NextRequest) {
       resourceId: appointment.id,
       success: true,
       changes: {
-        patientId: validatedData.patientId,
-        providerId: validatedData.providerId,
-        startTime: validatedData.startTime,
-        endTime: validatedData.endTime,
-        type: validatedData.type,
+        patientId: sanitizedData.patientId,
+        providerId: sanitizedData.providerId,
+        startTime: sanitizedData.startTime,
+        endTime: sanitizedData.endTime,
+        type: sanitizedData.type,
+        status: sanitizedData.status,
       },
       ...requestInfo,
     });
 
+    // Return response according to the new convention
     return NextResponse.json(
       {
         success: true,
         message: "Appointment created successfully",
         data: {
-          id: appointment.id,
+          appointmentId: appointment.id,
           patientId: appointment.patientId,
-          providerId: appointment.providerId,
-          startTime: appointment.startTime,
-          endTime: appointment.endTime,
-          type: appointment.type,
-          reason: appointment.reason,
-          priority: appointment.priority,
-          locationType: appointment.locationType,
-          patient: appointment.patient,
-          provider: appointment.provider,
+          doctorId: appointment.providerId,
+          dateTime: appointment.startTime.toISOString(),
+          purpose: appointment.type,
+          notes: sanitizedData.notes || "",
+          status: appointment.status,
           createdAt: appointment.createdAt,
         },
       },
@@ -481,27 +526,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      error instanceof Error &&
-      error.name === "ZodError" &&
-      "errors" in error
-    ) {
-      return NextResponse.json(
-        {
-          error: "Bad Request",
-          message: "Validation error",
-          details: (error as any).errors.map(
-            (e: any) => `${e.path.join(".")}: ${e.message}`
-          ),
-        },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       {
         error: "Internal Server Error",
         message: "An unexpected error occurred",
+        details: ["Please try again later"],
       },
       { status: 500 }
     );

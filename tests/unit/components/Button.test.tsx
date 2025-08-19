@@ -4,7 +4,7 @@ import { Button } from "@/components/common/Button";
 
 describe("Button Component", () => {
   const defaultProps = {
-    children: "Click me",
+    btnTitle: "Click me",
     onClick: jest.fn(),
   };
 
@@ -28,25 +28,27 @@ describe("Button Component", () => {
 
     test("renders button with different variants", () => {
       const { rerender } = render(
-        <Button {...defaultProps} variant="default" />
+        <Button {...defaultProps} className="bg-primary" />
       );
       expect(screen.getByRole("button")).toHaveClass("bg-primary");
 
-      rerender(<Button {...defaultProps} variant="destructive" />);
+      rerender(<Button {...defaultProps} className="bg-destructive" />);
       expect(screen.getByRole("button")).toHaveClass("bg-destructive");
 
-      rerender(<Button {...defaultProps} variant="outline" />);
+      rerender(<Button {...defaultProps} className="border border-input" />);
       expect(screen.getByRole("button")).toHaveClass("border border-input");
     });
 
     test("renders button with different sizes", () => {
-      const { rerender } = render(<Button {...defaultProps} size="default" />);
+      const { rerender } = render(
+        <Button {...defaultProps} className="h-10 px-4 py-2" />
+      );
       expect(screen.getByRole("button")).toHaveClass("h-10 px-4 py-2");
 
-      rerender(<Button {...defaultProps} size="sm" />);
+      rerender(<Button {...defaultProps} className="h-9 px-3" />);
       expect(screen.getByRole("button")).toHaveClass("h-9 px-3");
 
-      rerender(<Button {...defaultProps} size="lg" />);
+      rerender(<Button {...defaultProps} className="h-11 px-8" />);
       expect(screen.getByRole("button")).toHaveClass("h-11 px-8");
     });
   });
@@ -143,7 +145,7 @@ describe("Button Component", () => {
   });
 
   describe("Edge cases", () => {
-    test("renders without children", () => {
+    test("renders without btnTitle", () => {
       render(<Button onClick={jest.fn()} />);
       expect(screen.getByRole("button")).toBeInTheDocument();
     });

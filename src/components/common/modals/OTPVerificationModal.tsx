@@ -309,5 +309,4 @@ const OTPVerificationModal: React.FC<OTPVerificationModalProps> = ({
     </div>
   );
 };
-
 export default OTPVerificationModal;

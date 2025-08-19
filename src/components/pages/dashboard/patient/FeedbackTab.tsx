@@ -93,7 +93,7 @@ const FeedbackTab = () => {
           </h2>
           <p className="text-gray-600">
             Help us improve the EHR system by sharing your experience,
-            suggestions, or reporting any issues you've encountered.
+            suggestions, or reporting any issues you&apos;ve encountered.
           </p>
         </div>
 

@@ -7,17 +7,22 @@ import logger from "../../../../../../lib/logger";
 import { AuditService, AuditAction } from "../../../../../../lib/audit";
 import { extractRequestInfoFromRequest } from "../../../../../../utils/appRouterHelpers";
 import { Role } from "../../../../../../types/auth";
+import { UserRole } from "@prisma/client";
 
 // PUT update user role (Super Admin only)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let body: { roleIds?: string[]; action?: string } = {};
+  let userId: string;
+  
   try {
-    const { id: userId } = await params;
+    const { id } = await params;
+    userId = id;
     console.log("Debug - Role change API called for user:", userId);
 
-    const body = await request.json();
+    body = await request.json();
     const { newRole, reason } = body;
 
     // Extract request info once for use throughout the function
@@ -27,12 +32,17 @@ export async function PUT(
     const mapDisplayRoleToEnum = (displayRole: string): string => {
       const roleMap: Record<string, string> = {
         "Super Admin": "SUPER_ADMIN",
-        Admin: "ADMIN",
+        "SUPER_ADMIN": "SUPER_ADMIN",
+        Admin: "ADMIN", 
+        ADMIN: "ADMIN",
         Doctor: "DOCTOR",
+        DOCTOR: "DOCTOR", 
         Nurse: "NURSE",
+        NURSE: "NURSE",
         Patient: "PATIENT",
+        PATIENT: "PATIENT",
       };
-      return roleMap[displayRole] || displayRole;
+      return roleMap[displayRole] || displayRole.toUpperCase().replace(/\s+/g, "_");
     };
 
     console.log("Debug - Request body:", { newRole, reason });
@@ -45,17 +55,21 @@ export async function PUT(
       );
     }
 
-    // Validate role is valid
-    console.log("Debug - Available roles:", Object.values(Role));
+    // Map the role first, then validate
+    const mappedRole = mapDisplayRoleToEnum(newRole);
+    
+    // Validate role is valid - check against Prisma's UserRole enum
+    console.log("Debug - Available UserRole enum values:", Object.values(UserRole));
     console.log("Debug - New role:", newRole);
+    console.log("Debug - Mapped role:", mappedRole);
     console.log(
       "Debug - Role validation:",
-      Object.values(Role).includes(newRole)
+      Object.values(UserRole).includes(mappedRole as UserRole)
     );
 
-    if (!Object.values(Role).includes(newRole)) {
+    if (!Object.values(UserRole).includes(mappedRole as UserRole)) {
       return NextResponse.json(
-        { error: "Bad Request", message: "Invalid role specified" },
+        { error: "Bad Request", message: `Invalid role specified: ${newRole} (mapped to: ${mappedRole})` },
         { status: 400 }
       );
     }
@@ -182,9 +196,8 @@ export async function PUT(
       userRoles: currentUser.userRoles,
     });
 
-    // Check if trying to change to the same role
-    const mappedNewRole = mapDisplayRoleToEnum(newRole);
-    if (currentUser.role === mappedNewRole) {
+    // Check if trying to change to the same role (use the mapped role we already computed)
+    if (currentUser.role === mappedRole) {
       return NextResponse.json(
         { error: "Bad Request", message: "User already has this role" },
         { status: 400 }
@@ -194,8 +207,8 @@ export async function PUT(
     console.log("Debug - Role change validation:", {
       currentRole: currentUser.role,
       newRole: newRole,
-      mappedNewRole: mappedNewRole,
-      willChange: currentUser.role !== mappedNewRole,
+      mappedNewRole: mappedRole,
+      willChange: currentUser.role !== mappedRole,
     });
 
     // Prevent changing system roles
@@ -214,7 +227,7 @@ export async function PUT(
     console.log("Debug - Starting database transaction for role update");
     console.log("Debug - Current user role:", currentUser.role);
     console.log("Debug - New role requested:", newRole);
-    console.log("Debug - Mapped new role:", mappedNewRole);
+    console.log("Debug - Mapped new role:", mappedRole);
 
     // Test database connectivity
     try {
@@ -249,35 +262,74 @@ export async function PUT(
         console.log("Debug - Existing roles revoked");
 
         console.log("Debug - Finding new role:", newRole);
+        console.log("Debug - Mapped new role:", mappedRole);
 
-        // Find the new role
-        const role = await tx.role.findUnique({
-          where: { name: newRole },
+        // Find the new role in the roles table - use the display name (e.g., "Doctor", "Super Admin")
+        // The roles table has display names, not enum values
+        let role = await tx.role.findUnique({
+          where: { name: newRole }, // Use the original newRole, not the mapped one
         });
 
         if (!role) {
-          console.log("Debug - Role not found:", newRole);
-          throw new Error(`Role ${newRole} not found`);
+          // If not found by exact match, try case-insensitive search
+          const allRoles = await tx.role.findMany();
+          role = allRoles.find(r => r.name.toLowerCase() === newRole.toLowerCase());
+          
+          if (!role) {
+            console.log("Debug - Role not found in database:", { 
+              searchedFor: newRole, 
+              availableRoles: allRoles.map(r => r.name) 
+            });
+            throw new Error(`Role "${newRole}" not found in database`);
+          }
         }
 
         console.log("Debug - Role found:", role);
 
-        // Assign new role
-        const userRole = await tx.userRoleAssignment.create({
-          data: {
-            userId,
-            roleId: role.id,
-            grantedBy: user.userId,
+        // Check if this role assignment already exists (even if revoked)
+        const existingAssignment = await tx.userRoleAssignment.findUnique({
+          where: {
+            userId_roleId: {
+              userId,
+              roleId: role.id,
+            },
           },
         });
 
+        let userRole;
+        if (existingAssignment) {
+          console.log("Debug - Reactivating existing role assignment");
+          // If assignment exists, update it to be active again
+          userRole = await tx.userRoleAssignment.update({
+            where: {
+              id: existingAssignment.id,
+            },
+            data: {
+              revokedAt: null,
+              grantedBy: user.userId,
+              grantedAt: new Date(),
+            },
+          });
+        } else {
+          console.log("Debug - Creating new role assignment");
+          // Create new assignment if it doesn't exist
+          userRole = await tx.userRoleAssignment.create({
+            data: {
+              userId,
+              roleId: role.id,
+              grantedBy: user.userId,
+            },
+          });
+        }
+
         console.log("Debug - New role assigned:", userRole);
 
-        // Update user's primary role
-        console.log("Debug - Updating user primary role to:", mappedNewRole);
+        // Update user's primary role - MUST use the mapped enum value
+        console.log("Debug - Updating user primary role to:", mappedRole);
+        const userRoleEnum = mappedRole as any; // Cast to any to satisfy Prisma enum
         await tx.user.update({
           where: { id: userId },
-          data: { role: mappedNewRole },
+          data: { role: userRoleEnum },
         });
 
         console.log("Debug - User primary role updated");
@@ -288,6 +340,11 @@ export async function PUT(
       console.log("Debug - Transaction completed successfully:", result);
     } catch (transactionError) {
       console.error("Debug - Transaction failed:", transactionError);
+      console.error("Debug - Transaction error details:", {
+        message: transactionError instanceof Error ? transactionError.message : "Unknown",
+        name: transactionError instanceof Error ? transactionError.name : "Unknown",
+        stack: transactionError instanceof Error ? transactionError.stack : undefined,
+      });
       throw transactionError;
     }
 
@@ -344,8 +401,8 @@ export async function PUT(
     console.error("Debug - Role change error details:", {
       error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
-      targetUserId: params ? (await params).id : "unknown",
-      newRole: body?.newRole,
+      targetUserId: userId || "unknown",
+      newRole: body?.newRole || "unknown",
       errorType: error?.constructor?.name,
       errorDetails: error,
     });

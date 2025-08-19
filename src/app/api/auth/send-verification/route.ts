@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Send verification email
     const emailSent = await emailService.sendVerificationEmail({
       email: user.email,
-      firstName: user.firstName,
+      firstName: user.firstName || "User",
       otp,
       expiresIn: "15 minutes",
     });

@@ -2,7 +2,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, ReactNode } from "react";
-import { toast } from "sonner";
 
 interface RouteGuardProps {
   children: ReactNode;

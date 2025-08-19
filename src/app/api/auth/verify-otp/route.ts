@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Send welcome email
-    await emailService.sendWelcomeEmail(user.email, user.firstName);
+    await emailService.sendWelcomeEmail(user.email, user.firstName || "User");
 
     // Log the action
     await AuditService.log({

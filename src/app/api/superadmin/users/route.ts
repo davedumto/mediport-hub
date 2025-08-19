@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessTokenFromRequest } from "../../../../lib/auth";
-import { hasPermission } from "../../../../lib/permissions";
-import { Permission } from "../../../../types/auth";
 import prisma from "../../../../lib/db";
 import logger from "../../../../lib/logger";
 import { AuditService, AuditAction } from "../../../../lib/audit";
@@ -70,7 +68,11 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: any = {};
+    const where: {
+      role?: string;
+      isActive?: boolean;
+      email?: { contains: string };
+    } = {};
 
     if (role) where.role = role;
     if (status) where.isActive = status === "active";

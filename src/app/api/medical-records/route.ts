@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "../../../lib/db";
-import { AuditService, AuditAction } from "../../../lib/audit";
-import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
-import logger from "../../../lib/logger";
 import { verifyAccessToken } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { AuditService, AuditAction } from "../../../lib/audit";
+import logger from "../../../lib/logger";
+import { extractRequestInfoFromRequest } from "../../../utils/appRouterHelpers";
 import { hasPermission } from "../../../lib/permissions";
 import { Permission } from "../../../types/auth";
 import { createMedicalRecordSchema } from "../../../lib/validation";
 import { SanitizationService } from "../../../services/sanitizationService";
-import { encryptField } from "../../../lib/encryption";
+import { PIIProtectionService } from "../../../services/piiProtectionService";
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,7 +74,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
     // Build where clause based on permissions
-    let whereClause: any = {};
+    const whereClause: {
+      patientId?: string | { in: string[] };
+      recordType?: string;
+      visitDate?: { gte: Date; lte: Date };
+    } = {};
 
     if (patientId) {
       whereClause.patientId = patientId;
@@ -320,13 +324,13 @@ export async function POST(request: NextRequest) {
     const encryptedData = {
       ...sanitizedData,
       descriptionEncrypted: sanitizedData.description
-        ? await encryptField(sanitizedData.description)
+        ? await PIIProtectionService.encryptField(sanitizedData.description)
         : null,
       findingsEncrypted: sanitizedData.findings
-        ? await encryptField(sanitizedData.findings)
+        ? await PIIProtectionService.encryptField(sanitizedData.findings)
         : null,
       recommendationsEncrypted: sanitizedData.recommendations
-        ? await encryptField(sanitizedData.recommendations)
+        ? await PIIProtectionService.encryptField(sanitizedData.recommendations)
         : null,
     };
 

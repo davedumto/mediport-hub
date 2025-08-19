@@ -154,15 +154,8 @@ export async function PUT(
       role,
       specialty,
       medicalLicenseNumber,
-      department,
-      licenseNumber,
       dateOfBirth,
       gender,
-      phoneNumber,
-      address,
-      yearsOfExperience,
-      education,
-      certifications,
     } = body;
 
     const requestInfo = extractRequestInfoFromRequest(request);

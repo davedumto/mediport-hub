@@ -23,11 +23,15 @@ class EmailService {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.ethereal.email",
       port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: false, // true for 465, false for other ports
+      secure: parseInt(process.env.SMTP_PORT || "587") === 465, // true for 465, false for other ports
       auth: {
         user: process.env.SMTP_USER || "test@ethereal.email",
         pass: process.env.SMTP_PASS || "test123",
       },
+      // Add timeout and connection settings for Gmail
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     });
   }
 

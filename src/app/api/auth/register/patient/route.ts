@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, generateMFASecret } from "@/lib/auth";
 import { ConsentService } from "@/services/consentService";
@@ -8,9 +7,24 @@ import { AuditAction } from "@/lib/audit";
 import logger from "@/lib/logger";
 import { emailService } from "@/services/emailService";
 import { extractRequestInfoFromRequest } from "@/utils/appRouterHelpers";
+import { PIIProtectionService } from "@/services/piiProtectionService";
 
 export async function POST(request: NextRequest) {
   try {
+    // Initialize PII protection service with encryption key
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      logger.error("Encryption key not configured");
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     const body = await request.json();
     const { fullName, email, password, gdprConsent } = body;
 
@@ -79,15 +93,38 @@ export async function POST(request: NextRequest) {
     // Generate MFA secret
     const mfaSecret = generateMFASecret();
 
-    // Create user with PATIENT role
+    // Prepare PII data for encryption (exactly like doctor registration)
+    const { encryptedFields } = PIIProtectionService.prepareUserDataForStorage({
+      firstName,
+      lastName,
+      email,
+    });
+
+    // Create user with ONLY encrypted PII fields - no plain text PII stored! (exactly like doctor)
     const user = await prisma.user.create({
       data: {
-        email,
+        // Email is required for unique constraint but we'll also store encrypted version
+        email, // This is needed for login lookup, but sensitive data is encrypted
+        // DO NOT store plain text PII - only encrypted versions
+        firstName: null, // Explicitly null - use encrypted version only
+        lastName: null,  // Explicitly null - use encrypted version only
+        // Store encrypted PII fields - this is the ONLY place PII is stored
+        firstNameEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.firstName || {}),
+          "utf8"
+        ),
+        lastNameEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.lastName || {}),
+          "utf8"
+        ),
+        emailEncrypted: Buffer.from(
+          JSON.stringify(encryptedFields.email || {}),
+          "utf8"
+        ),
+        // Other fields
         passwordHash,
-        firstName,
-        lastName,
         role: "PATIENT",
-        verificationStatus: "PENDING_VERIFICATION", // Changed from VERIFIED to PENDING_VERIFICATION
+        verificationStatus: "PENDING_VERIFICATION",
         mfaSecret,
         mfaEnabled: false,
         isActive: true,
@@ -101,9 +138,9 @@ export async function POST(request: NextRequest) {
     const patient = await prisma.patient.create({
       data: {
         userId: user.id, // Link to the user record
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
+        firstName: null, // Explicitly null - use encrypted version only (like doctor pattern)
+        lastName: null,  // Explicitly null - use encrypted version only (like doctor pattern)
+        email: user.email, // Keep email for patient identification
         dateOfBirth: new Date(), // Default date, can be updated later
         gender: "OTHER", // Default gender, can be updated later
         status: "ACTIVE",
@@ -154,7 +191,7 @@ export async function POST(request: NextRequest) {
       // Send verification email
       await emailService.sendVerificationEmail({
         email: user.email,
-        firstName: user.firstName,
+        firstName: user.firstName || "Patient",
         otp,
         expiresIn: "15 minutes",
       });
@@ -222,7 +259,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Return success response matching the API specification
+    // Return success response WITHOUT exposing PII data
     return NextResponse.json(
       {
         success: true,
@@ -231,18 +268,14 @@ export async function POST(request: NextRequest) {
         data: {
           user: {
             id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
             role: user.role,
-            verificationStatus: user.verificationStatus, // Added
+            verificationStatus: user.verificationStatus,
+            // PII data removed for security
           },
           patient: {
             id: patient.id,
-            firstName: patient.firstName,
-            lastName: patient.lastName,
-            email: patient.email,
             status: patient.status,
+            // PII data removed for security
           },
           userId: user.id,
           patientId: patient.id,
