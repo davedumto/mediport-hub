@@ -28,3 +28,36 @@ interface Patient {
   id: string;
   name: string;
 }
+
+interface MedicalReport {
+  id: string;
+  patient: {
+    id: string;
+    name: string;
+  };
+  doctor: {
+    id: string;
+    name: string;
+  };
+  date: string;
+  subject: string;
+  status: "Reviewed" | "Submitted" | "Draft" | "Pending Review";
+  reportDetails: string;
+  attachedFiles?: AttachedFile[];
+  primaryDiagnosis?: string;
+}
+
+interface AttachedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+}
+
+interface FilterOptions {
+  patientSearch: string;
+  doctorFilter: string;
+  dateFrom: string;
+  dateTo: string;
+}
