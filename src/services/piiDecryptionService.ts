@@ -211,7 +211,7 @@ export class PIIDecryptionService {
     try {
       if (!patient) return null;
 
-      const decryptedPatientData: any = {};
+      const decryptedPatientData: any = { ...patient }; // Preserve all existing fields
 
       // Helper function to parse encrypted data (same as in decryptUserPII)
       const parseEncryptedData = (encryptedField: any) => {
@@ -365,6 +365,66 @@ export class PIIDecryptionService {
       throw new AppError(
         ErrorCodes.INTERNAL_ERROR,
         "Failed to decrypt patient data",
+        500
+      );
+    }
+  }
+
+  /**
+   * Decrypt appointment PII data from encrypted database fields
+   */
+  static async decryptAppointmentPII(appointment: any): Promise<any> {
+    try {
+      const decryptedAppointment = { ...appointment };
+
+      // Helper function to parse encrypted data
+      const parseEncryptedData = (encryptedField: any) => {
+        if (Buffer.isBuffer(encryptedField)) {
+          const bufferString = Buffer.from(encryptedField).toString('utf8');
+          return JSON.parse(bufferString);
+        } else if (typeof encryptedField === 'string') {
+          return JSON.parse(encryptedField);
+        } else if (encryptedField instanceof Uint8Array) {
+          // Handle Uint8Array from database - convert to proper buffer first
+          const buffer = Buffer.from(encryptedField);
+          const bufferString = buffer.toString('utf8');
+          return JSON.parse(bufferString);
+        } else {
+          return encryptedField;
+        }
+      };
+
+      // Decrypt notes if available
+      if (appointment.notesEncrypted) {
+        try {
+          const encryptedData = parseEncryptedData(appointment.notesEncrypted);
+          decryptedAppointment.notes = PIIProtectionService.decryptField(
+            encryptedData.encryptedData,
+            encryptedData.iv,
+            encryptedData.tag
+          );
+        } catch (error) {
+          logger.warn("Failed to decrypt appointment notes:", error);
+          decryptedAppointment.notes = "[Encrypted]";
+        }
+      }
+
+      // Decrypt patient PII if available
+      if (appointment.patient) {
+        decryptedAppointment.patient = await this.decryptPatientPII(appointment.patient);
+      }
+
+      // Decrypt provider PII if available
+      if (appointment.provider) {
+        decryptedAppointment.provider = await this.decryptUserPII(appointment.provider);
+      }
+
+      return decryptedAppointment;
+    } catch (error) {
+      logger.error("Failed to decrypt appointment PII:", error);
+      throw new AppError(
+        ErrorCodes.INTERNAL_ERROR,
+        "Failed to decrypt appointment data",
         500
       );
     }

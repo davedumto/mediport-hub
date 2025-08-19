@@ -8,6 +8,7 @@ import { hasPermission } from "../../../lib/permissions";
 import { Permission } from "../../../types/auth";
 import { SanitizationService } from "../../../services/sanitizationService";
 import { PIIProtectionService } from "../../../services/piiProtectionService";
+import { PIIDecryptionService } from "../../../services/piiDecryptionService";
 
 export async function GET(request: NextRequest) {
   try {
@@ -128,9 +129,42 @@ export async function GET(request: NextRequest) {
         patient: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             dateOfBirth: true,
+            gender: true,
+            phoneEncrypted: true,
+            addressStreetEncrypted: true,
+            addressCityEncrypted: true,
+            addressStateEncrypted: true,
+            addressZipEncrypted: true,
+            addressCountryEncrypted: true,
+            emergencyNameEncrypted: true,
+            emergencyRelationshipEncrypted: true,
+            emergencyPhoneEncrypted: true,
+            bloodType: true,
+            allergies: true,
+            chronicConditions: true,
+            currentMedications: true,
+            assignedProviderId: true,
+            status: true,
+            gdprConsent: true,
+            gdprConsentDate: true,
+            gdprConsentVersion: true,
+            createdAt: true,
+            updatedAt: true,
+            createdBy: true,
+            updatedBy: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstNameEncrypted: true,
+                lastNameEncrypted: true,
+                emailEncrypted: true,
+              },
+            },
           },
         },
         provider: {
@@ -139,6 +173,10 @@ export async function GET(request: NextRequest) {
             firstName: true,
             lastName: true,
             role: true,
+            firstNameEncrypted: true,
+            lastNameEncrypted: true,
+            emailEncrypted: true,
+            specialtyEncrypted: true,
           },
         },
       },
@@ -161,10 +199,36 @@ export async function GET(request: NextRequest) {
       ...requestInfo,
     });
 
+    // Decrypt appointment data before returning
+    const decryptedAppointments = await Promise.all(
+      appointments.map(async (appointment) => {
+        try {
+          return await PIIDecryptionService.decryptAppointmentPII(appointment);
+        } catch (error) {
+          logger.error("Failed to decrypt appointment:", error);
+          // Return appointment with encrypted fields marked
+          return {
+            ...appointment,
+            notes: appointment.notesEncrypted ? "[Decryption Failed]" : null,
+            patient: {
+              ...appointment.patient,
+              firstName: appointment.patient.firstName || "[Decryption Failed]",
+              lastName: appointment.patient.lastName || "[Decryption Failed]",
+            },
+            provider: {
+              ...appointment.provider,
+              firstName: appointment.provider.firstName || "[Decryption Failed]",
+              lastName: appointment.provider.lastName || "[Decryption Failed]",
+            },
+          };
+        }
+      })
+    );
+
     return NextResponse.json({
       success: true,
       data: {
-        appointments: appointments.map((appointment) => ({
+        appointments: decryptedAppointments.map((appointment) => ({
           id: appointment.id,
           patientId: appointment.patientId,
           providerId: appointment.providerId,
@@ -175,7 +239,7 @@ export async function GET(request: NextRequest) {
           status: appointment.status,
           reason: appointment.reason,
           priority: appointment.priority,
-          notes: appointment.notesEncrypted ? "***ENCRYPTED***" : null,
+          notes: appointment.notes,
           reminderSent: appointment.reminderSent,
           confirmationSent: appointment.confirmationSent,
           locationType: appointment.locationType,

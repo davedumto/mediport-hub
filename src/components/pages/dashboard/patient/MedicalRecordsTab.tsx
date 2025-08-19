@@ -78,13 +78,14 @@ const getTypeLabel = (type: string) => {
 const MedicalRecordsTabs = () => {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  const [activeTab, setActiveTab] = useState<'records' | 'reports'>('records');
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(
+    null
+  );
   const { tokens, user } = useAuth();
 
   useEffect(() => {
     fetchMedicalRecords();
-  }, [activeTab]);
+  }, []);
 
   const fetchMedicalRecords = async () => {
     if (!tokens?.accessToken || !user?.id) return;
@@ -103,10 +104,9 @@ const MedicalRecordsTabs = () => {
         const patientId = patientData.data?.id;
 
         if (patientId) {
-          // Add filter parameter based on active tab
-          const filterParam = activeTab === 'reports' ? '&category=reports' : '&category=records';
+          // Only fetch medical records, no category filter needed
           const response = await fetch(
-            `/api/medical-records?type=patient&patientId=${patientId}${filterParam}`,
+            `/api/medical-records?type=patient&patientId=${patientId}`,
             {
               headers: {
                 Authorization: `Bearer ${tokens.accessToken}`,
@@ -176,7 +176,7 @@ const MedicalRecordsTabs = () => {
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors p-2 rounded-lg hover:bg-gray-50"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to {activeTab === 'records' ? 'Medical Records' : 'Medical Reports'}
+            Back to Medical Records
           </button>
         </div>
 
@@ -195,7 +195,8 @@ const MedicalRecordsTabs = () => {
                   </span>
                   <span className="flex items-center gap-1">
                     <User className="h-4 w-4" />
-                    Dr. {selectedRecord.provider.firstName} {selectedRecord.provider.lastName}
+                    Dr. {selectedRecord.provider.firstName}{" "}
+                    {selectedRecord.provider.lastName}
                   </span>
                   <span className="flex items-center gap-1">
                     <Stethoscope className="h-4 w-4" />
@@ -209,11 +210,15 @@ const MedicalRecordsTabs = () => {
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Record Information</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  Record Information
+                </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Type:</span>
-                    <span className="font-medium">{getTypeLabel(selectedRecord.type)}</span>
+                    <span className="font-medium">
+                      {getTypeLabel(selectedRecord.type)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Status:</span>
@@ -305,26 +310,33 @@ const MedicalRecordsTabs = () => {
 
               {/* Show message only if no detailed content is available */}
               {(() => {
-                const hasContent = selectedRecord.description || selectedRecord.findings || 
-                                 selectedRecord.diagnosis || selectedRecord.treatmentPlan || 
-                                 selectedRecord.recommendations;
+                const hasContent =
+                  selectedRecord.description ||
+                  selectedRecord.findings ||
+                  selectedRecord.diagnosis ||
+                  selectedRecord.treatmentPlan ||
+                  selectedRecord.recommendations;
                 console.log("Content check:", {
                   description: selectedRecord.description,
                   findings: selectedRecord.findings,
                   diagnosis: selectedRecord.diagnosis,
                   treatmentPlan: selectedRecord.treatmentPlan,
                   recommendations: selectedRecord.recommendations,
-                  hasContent
+                  hasContent,
                 });
                 return !hasContent;
               })() && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="h-4 w-4 text-blue-600" />
-                    <h4 className="font-medium text-blue-900">Basic Medical Record</h4>
+                    <h4 className="font-medium text-blue-900">
+                      Basic Medical Record
+                    </h4>
                   </div>
                   <p className="text-sm text-blue-700">
-                    This is a basic medical record entry. Detailed information may be added during future consultations with your healthcare provider.
+                    This is a basic medical record entry. Detailed information
+                    may be added during future consultations with your
+                    healthcare provider.
                   </p>
                 </div>
               )}
@@ -338,22 +350,16 @@ const MedicalRecordsTabs = () => {
   const renderEmptyState = () => (
     <div className="w-full flex items-center justify-center py-12">
       <div className="text-center">
-        {activeTab === 'records' ? (
-          <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-        ) : (
-          <Stethoscope className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-        )}
+        <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">
-          No {activeTab === 'records' ? 'Medical Records' : 'Medical Reports'}
+          No Medical Records
         </h3>
         <p className="text-gray-500 mb-4">
-          You don't have any published {activeTab === 'records' ? 'medical records' : 'medical reports'} yet.
+          You don't have any published medical records yet.
         </p>
         <p className="text-sm text-gray-400">
-          {activeTab === 'records' 
-            ? 'Medical records will appear here once your doctor creates comprehensive documentation of your care.'
-            : 'Medical reports will appear here once your doctor creates specific assessment reports for your visits.'
-          }
+          Medical records will appear here once your doctor creates
+          comprehensive documentation of your care.
         </p>
       </div>
     </div>
@@ -361,67 +367,39 @@ const MedicalRecordsTabs = () => {
 
   return (
     <div className="w-full space-y-4">
-      {/* Tab Toggle */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-6">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Your Medical Data
+            Your Medical Records
           </h2>
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setActiveTab('records')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'records'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Medical Records
-            </button>
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'reports'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Medical Reports
-            </button>
-          </div>
         </div>
         <span className="text-sm text-gray-500">
-          {records.length} {activeTab === 'records' ? 'record' : 'report'}{records.length !== 1 ? 's' : ''}
+          {records.length} record{records.length !== 1 ? "s" : ""}
         </span>
       </div>
 
-      {/* Tab Description */}
+      {/* Description */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
           <div className="p-2 bg-blue-100 rounded-lg">
-            {activeTab === 'records' ? (
-              <FileText className="h-5 w-5 text-blue-600" />
-            ) : (
-              <Stethoscope className="h-5 w-5 text-blue-600" />
-            )}
+            <FileText className="h-5 w-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="font-medium text-blue-900 mb-1">
-              {activeTab === 'records' ? 'Medical Records' : 'Medical Reports'}
-            </h3>
+            <h3 className="font-medium text-blue-900 mb-1">Medical Records</h3>
             <p className="text-sm text-blue-700">
-              {activeTab === 'records' 
-                ? 'Comprehensive ongoing documentation of your healthcare including consultations, lab results, prescriptions, and treatment plans.'
-                : 'Specific assessment reports created for particular purposes such as specialist consultations, procedure summaries, and diagnostic evaluations.'
-              }
+              Comprehensive ongoing documentation of your healthcare including
+              consultations, lab results, prescriptions, and treatment plans.
             </p>
           </div>
         </div>
       </div>
 
       {/* Records List or Empty State */}
-      {records.length === 0 ? renderEmptyState() : (
+      {records.length === 0 ? (
+        renderEmptyState()
+      ) : (
         <div className="grid gap-4">
           {records.map((record) => (
             <div
@@ -432,7 +410,9 @@ const MedicalRecordsTabs = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-medium text-gray-900">{record.title}</h3>
+                    <h3 className="font-medium text-gray-900">
+                      {record.title}
+                    </h3>
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
                         record.status
@@ -459,8 +439,9 @@ const MedicalRecordsTabs = () => {
                   </div>
 
                   <div className="text-xs text-gray-500">
-                    Created: {new Date(record.createdAt).toLocaleDateString()} | 
-                    Last updated: {new Date(record.updatedAt).toLocaleDateString()}
+                    Created: {new Date(record.createdAt).toLocaleDateString()} |
+                    Last updated:{" "}
+                    {new Date(record.updatedAt).toLocaleDateString()}
                   </div>
                 </div>
 
@@ -476,6 +457,6 @@ const MedicalRecordsTabs = () => {
       )}
     </div>
   );
-}
+};
 
 export default MedicalRecordsTabs;
