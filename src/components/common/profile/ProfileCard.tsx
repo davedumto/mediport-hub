@@ -1,15 +1,17 @@
 "use client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Call, PenAdd, Trash } from "iconsax-reactjs";
-import { Mail, MapPin, PenBox } from "lucide-react";
+import { Mail, MapPin, PenBox, Shield } from "lucide-react";
 import Button from "../Button";
 import { useState } from "react";
 import EditProfileDialog from "../modals/EditProfileModal.component";
+import ConsentManagementModal from "../modals/ConsentManagementModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfileUpdate } from "@/hooks/useProfileUpdate";
 
 const ProfileCard = () => {
   const [open, setOpen] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const { user } = useAuth();
   const { updateProfile, isUpdating } = useProfileUpdate();
 
@@ -125,6 +127,15 @@ const ProfileCard = () => {
               icon={<PenBox size={14} color="white" />}
             />
             <Button
+              btnTitle="Privacy Settings"
+              onClick={() => {
+                setShowConsentModal(true);
+              }}
+              className="h-7 w-44 rounded-none bg-blue-600 hover:bg-blue-700"
+              textClassName="text-xs"
+              icon={<Shield size={14} color="white" />}
+            />
+            <Button
               btnTitle="Delete account"
               onClick={() => {}}
               className="h-7 w-44 rounded-none bg-white border-red-500 border-1 hover:bg-white text-red-500"
@@ -167,6 +178,13 @@ const ProfileCard = () => {
           }
         }}
       />
+      {user && (
+        <ConsentManagementModal
+          isOpen={showConsentModal}
+          onClose={() => setShowConsentModal(false)}
+          userId={user.id}
+        />
+      )}
     </>
   );
 };

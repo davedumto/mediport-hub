@@ -3,6 +3,7 @@ import OverViewTab from "./OverViewTab";
 import AppointmentTab from "./AppointmentTab";
 import MedicalRecordsTabs from "./MedicalRecordsTab";
 import FeedbackTab from "./FeedbackTab";
+import PrivacyConsentTab from "./PrivacyConsentTab";
 
 const PatientTab = () => {
   return (
@@ -13,6 +14,7 @@ const PatientTab = () => {
             "Overview",
             "Appointments",
             "Medical Records",
+            "Privacy & Consents",
             "Feedback",
           ]}
           tabs={[
@@ -27,6 +29,10 @@ const PatientTab = () => {
             {
               id: "records",
               content: <MedicalRecordsTabs />,
+            },
+            {
+              id: "privacy",
+              content: <PrivacyConsentTab />,
             },
             {
               id: "feedback",

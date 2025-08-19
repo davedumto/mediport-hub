@@ -24,6 +24,7 @@
     "db:studio": "npx prisma studio",
     "db:seed": "npx prisma db seed",
     "db:setup": "npx prisma migrate deploy && npx prisma generate && npm run db:seed",
+    "docker:setup": "docker-compose up -d postgres && sleep 10 && npx prisma migrate deploy && npx prisma generate && npm run db:seed",
     "db:deploy": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",
     "db:push": "npx prisma db push"
