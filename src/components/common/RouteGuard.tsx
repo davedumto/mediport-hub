@@ -53,7 +53,7 @@ const RouteGuard = ({
   ]);
 
   // Show loading state while auth is initializing
-  if (!isLoading) {
+  if (isLoading) {
     return (
       <div className="w-full min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -65,16 +65,16 @@ const RouteGuard = ({
   }
 
   // Show fallback if access is denied
-  // if (
-  //   !isAuthenticated ||
-  //   (requiredRole && user?.role !== requiredRole) ||
-  //   (requiredPermissions.length > 0 &&
-  //     !requiredPermissions.some((permission) =>
-  //       user?.permissions?.includes(permission)
-  //     ))
-  // ) {
-  //   return fallback || null;
-  // }
+  if (
+    !isAuthenticated ||
+    (requiredRole && user?.role !== requiredRole) ||
+    (requiredPermissions.length > 0 &&
+      !requiredPermissions.some((permission) =>
+        user?.permissions?.includes(permission)
+      ))
+  ) {
+    return fallback || null;
+  }
 
   return <>{children}</>;
 };

@@ -14,11 +14,13 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 interface PatientVisitDetailsProps {
     form: UseFormReturn<MedicalReportFormData>;
     patients: Patient[];
+    isLoading?: boolean;
 }
 
 export const PatientVisitDetails: React.FC<PatientVisitDetailsProps> = ({
     form,
     patients,
+    isLoading = false,
 }) => {
 return (
     <div className="space-y-6">
@@ -33,10 +35,12 @@ return (
               <FormLabel className="text-sm font-medium text-gray-700">
                 Select Patient
               </FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
                 <FormControl>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a patient..." />
+                    <SelectValue 
+                      placeholder={isLoading ? "Loading patients..." : "Select a patient..."} 
+                    />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>

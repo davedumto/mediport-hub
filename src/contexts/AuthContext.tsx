@@ -129,9 +129,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Initialize authentication state
-  // useEffect(() => {
-  //   initializeAuth();
-  // }, []);
+  useEffect(() => {
+    initializeAuth();
+  }, []);
 
   const initializeAuth = async () => {
     try {

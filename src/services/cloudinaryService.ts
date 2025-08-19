@@ -274,6 +274,202 @@ export class CloudinaryService {
   }
 
   /**
+   * Upload medical document with security restrictions
+   */
+  static async uploadMedicalDocument(
+    buffer: Buffer,
+    filename: string,
+    userId: string,
+    patientId: string,
+    recordId: string,
+    options: Partial<CloudinaryUploadOptions> = {}
+  ): Promise<CloudinaryUploadResult> {
+    try {
+      // Validate medical document
+      const validation = this.validateMedicalDocument(buffer, filename);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: validation.errors.join('; '),
+        };
+      }
+
+      const documentOptions: CloudinaryUploadOptions = {
+        folder: 'mediport/medical-documents',
+        publicId: `medical_${recordId}_${Date.now()}_${filename.split('.')[0]}`,
+        resourceType: this.getResourceType(filename),
+        overwrite: false, // Don't overwrite medical documents
+        tags: ['medical-document', 'encrypted', `user_${userId}`, `patient_${patientId}`, `record_${recordId}`],
+        context: {
+          patient_id: patientId,
+          record_id: recordId,
+          uploaded_by: userId,
+          upload_date: new Date().toISOString(),
+          filename: filename,
+        },
+        ...options,
+      };
+
+      // For PDFs and documents, use raw resource type
+      if (documentOptions.resourceType === 'raw') {
+        const base64Data = `data:application/pdf;base64,${buffer.toString('base64')}`;
+        const result = await cloudinary.uploader.upload(base64Data, documentOptions);
+
+        logger.info('Medical document upload successful', {
+          publicId: result.public_id,
+          secureUrl: result.secure_url,
+          resourceType: result.resource_type,
+          format: result.format,
+          bytes: result.bytes,
+        });
+
+        return {
+          success: true,
+          publicId: result.public_id,
+          secureUrl: result.secure_url,
+          format: result.format,
+          bytes: result.bytes,
+        };
+      } else {
+        // For images, use the existing upload method
+        return this.uploadImage(buffer, documentOptions);
+      }
+
+    } catch (error: any) {
+      logger.error('Medical document upload failed', {
+        error: error.message,
+        stack: error.stack,
+      });
+
+      return {
+        success: false,
+        error: error.message || 'Failed to upload medical document',
+      };
+    }
+  }
+
+  /**
+   * Get appropriate resource type for file
+   */
+  private static getResourceType(filename: string): 'image' | 'video' | 'raw' | 'auto' {
+    const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+    
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const videoExtensions = ['.mp4', '.mov', '.avi', '.wmv'];
+    const documentExtensions = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
+
+    if (imageExtensions.includes(extension)) return 'image';
+    if (videoExtensions.includes(extension)) return 'video';
+    if (documentExtensions.includes(extension)) return 'raw';
+    
+    return 'auto';
+  }
+
+  /**
+   * Validate medical document file
+   */
+  static validateMedicalDocument(buffer: Buffer, filename: string): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Check file size (10MB limit for medical documents)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (buffer.length > maxSize) {
+      errors.push(`File size too large. Maximum size is ${maxSize / 1024 / 1024}MB.`);
+    }
+
+    // Check file extension for medical documents
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx', '.txt'];
+    const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+    if (!allowedExtensions.includes(extension)) {
+      errors.push(`Invalid file type. Allowed types: ${allowedExtensions.join(', ')}`);
+    }
+
+    // Basic file header validation
+    const header = buffer.slice(0, 8).toString('hex');
+    const validHeaders = [
+      'ffd8ff', // JPEG
+      '89504e47', // PNG
+      '47494638', // GIF
+      '52494646', // WebP (RIFF)
+      '25504446', // PDF (%PDF)
+      'd0cf11e0', // DOC/DOCX (MS Office)
+      '504b0304', // DOCX (ZIP-based)
+    ];
+
+    const isValidHeader = validHeaders.some(validHeader => 
+      header.toLowerCase().startsWith(validHeader.toLowerCase())
+    );
+
+    if (!isValidHeader) {
+      errors.push('Invalid file format or corrupted file.');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Generate secure access URL for medical documents
+   */
+  static generateSecureMedicalDocumentUrl(
+    publicId: string,
+    expiresInSeconds: number = 3600 // 1 hour default
+  ): string {
+    try {
+      return cloudinary.url(publicId, {
+        type: 'authenticated',
+        sign_url: true,
+        expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+        secure: true,
+      });
+    } catch (error: any) {
+      logger.error('Error generating secure medical document URL', {
+        publicId,
+        error: error.message,
+      });
+      return '';
+    }
+  }
+
+  /**
+   * Delete medical document with audit logging
+   */
+  static async deleteMedicalDocument(
+    publicId: string,
+    userId: string,
+    recordId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      logger.info('Deleting medical document', { publicId, userId, recordId });
+
+      const result = await cloudinary.uploader.destroy(publicId);
+
+      if (result.result === 'ok') {
+        logger.info('Medical document deleted successfully', { publicId, userId, recordId });
+        return { success: true };
+      } else {
+        logger.warn('Medical document deletion failed', { publicId, result });
+        return { success: false, error: `Deletion failed: ${result.result}` };
+      }
+
+    } catch (error: any) {
+      logger.error('Error deleting medical document', {
+        publicId,
+        userId,
+        recordId,
+        error: error.message,
+      });
+
+      return {
+        success: false,
+        error: error.message || 'Failed to delete medical document',
+      };
+    }
+  }
+
+  /**
    * Check Cloudinary configuration
    */
   static isConfigured(): boolean {

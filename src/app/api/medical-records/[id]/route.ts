@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "../../../../lib/db";
-import { AuditService, AuditAction } from "../../../../lib/audit";
-import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
-import logger from "../../../../lib/logger";
 import { verifyAccessToken } from "../../../../lib/auth";
-import { hasPermission } from "../../../../lib/permissions";
-import { Permission } from "../../../../types/auth";
-import { updateMedicalRecordSchema } from "../../../../lib/validation";
-import { SanitizationService } from "../../../../services/sanitizationService";
+import logger from "../../../../lib/logger";
+import { extractRequestInfoFromRequest } from "../../../../utils/appRouterHelpers";
+import { MedicalRecordService } from "../../../../services/medicalRecordService";
 import { PIIProtectionService } from "../../../../services/piiProtectionService";
 
 export async function GET(
@@ -15,6 +10,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Initialize PII protection service
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          message: "System configuration error",
+        },
+        { status: 500 }
+      );
+    }
+    PIIProtectionService.initialize(encryptionKey);
+
     const { id: recordId } = await params;
 
     // Extract and verify JWT token
@@ -33,284 +41,54 @@ export async function GET(
     const payload = verifyAccessToken(token);
     const requestInfo = extractRequestInfoFromRequest(request);
 
-    // Check permissions
-    const userPermissions = (payload.permissions || []) as Permission[];
-    const canReadAll = hasPermission(
-      userPermissions,
-      Permission.RECORD_READ_ALL
+    // Get the medical record with decrypted data
+    const record = await MedicalRecordService.getMedicalRecord(
+      recordId,
+      payload.userId,
+      payload.role
     );
-    const canReadAssigned = hasPermission(
-      userPermissions,
-      Permission.RECORD_READ_ASSIGNED
-    );
-    const canReadOwn = hasPermission(
-      userPermissions,
-      Permission.RECORD_READ_OWN
-    );
-
-    if (!canReadAll && !canReadAssigned && !canReadOwn) {
-      await AuditService.log({
-        userId: payload.userId,
-        userEmail: payload.email,
-        action: AuditAction.PERMISSION_DENIED,
-        resource: "medical_records",
-        resourceId: recordId,
-        success: false,
-        errorMessage: "Insufficient permissions to read medical record",
-        ...requestInfo,
-      });
-
-      return NextResponse.json(
-        {
-          error: "Forbidden",
-          message: "Insufficient permissions to access medical record",
-        },
-        { status: 403 }
-      );
-    }
-
-    // Get medical record with patient and provider info
-    const medicalRecord = await prisma.medicalRecord.findUnique({
-      where: { id: recordId },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            dateOfBirth: true,
-            userId: true,
-            assignedProviderId: true,
-          },
-        },
-        provider: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    if (!medicalRecord) {
-      await AuditService.log({
-        userId: payload.userId,
-        userEmail: payload.email,
-        action: AuditAction.DATA_ACCESSED,
-        resource: "medical_records",
-        resourceId: recordId,
-        success: false,
-        errorMessage: "Medical record not found",
-        ...requestInfo,
-      });
-
-      return NextResponse.json(
-        {
-          error: "Not Found",
-          message: "Medical record not found",
-        },
-        { status: 404 }
-      );
-    }
-
-    // Check access permissions based on user role and patient relationship
-    if (!canReadAll) {
-      if (canReadOwn && medicalRecord.patient.userId !== payload.userId) {
-        await AuditService.log({
-          userId: payload.userId,
-          userEmail: payload.email,
-          action: AuditAction.PERMISSION_DENIED,
-          resource: "medical_records",
-          resourceId: recordId,
-          success: false,
-          errorMessage: "Access denied to medical record",
-          ...requestInfo,
-        });
-
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message: "Access denied to medical record",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (
-        canReadAssigned &&
-        medicalRecord.patient.assignedProviderId !== payload.userId
-      ) {
-        await AuditService.log({
-          userId: payload.userId,
-          userEmail: payload.email,
-          action: AuditAction.PERMISSION_DENIED,
-          resource: "medical_records",
-          resourceId: recordId,
-          success: false,
-          errorMessage: "Access denied to medical record",
-          ...requestInfo,
-        });
-
-        return NextResponse.json(
-          {
-            error: "Forbidden",
-            message: "Access denied to medical record",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Decrypt sensitive fields for authorized users
-    let decryptedDescription = null;
-    let decryptedFindings = null;
-    let decryptedRecommendations = null;
-
-    if (medicalRecord.descriptionEncrypted) {
-      try {
-        // Helper function to parse encrypted data
-        const parseEncryptedData = (
-          encryptedField: Buffer | null | undefined
-        ) => {
-          if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          } else if (typeof encryptedField === "string") {
-            return JSON.parse(encryptedField);
-          } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          }
-          return encryptedField;
-        };
-
-        const encryptedData = parseEncryptedData(
-          medicalRecord.descriptionEncrypted
-        );
-        decryptedDescription = PIIProtectionService.decryptField(
-          encryptedData.encryptedData,
-          encryptedData.iv,
-          encryptedData.tag
-        );
-      } catch (error) {
-        logger.error("Failed to decrypt description:", error);
-        decryptedDescription = "***DECRYPTION_ERROR***";
-      }
-    }
-
-    if (medicalRecord.findingsEncrypted) {
-      try {
-        // Helper function to parse encrypted data
-        const parseEncryptedData = (
-          encryptedField: Buffer | null | undefined
-        ) => {
-          if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          } else if (typeof encryptedField === "string") {
-            return JSON.parse(encryptedField);
-          } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          }
-          return encryptedField;
-        };
-
-        const encryptedData = parseEncryptedData(
-          medicalRecord.findingsEncrypted
-        );
-        decryptedFindings = PIIProtectionService.decryptField(
-          encryptedData.encryptedData,
-          encryptedData.iv,
-          encryptedData.tag
-        );
-      } catch (error) {
-        logger.error("Failed to decrypt findings:", error);
-        decryptedFindings = "***DECRYPTION_ERROR***";
-      }
-    }
-
-    if (medicalRecord.recommendationsEncrypted) {
-      try {
-        // Helper function to parse encrypted data
-        const parseEncryptedData = (
-          encryptedField: Buffer | null | undefined
-        ) => {
-          if (Buffer.isBuffer(encryptedField)) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          } else if (typeof encryptedField === "string") {
-            return JSON.parse(encryptedField);
-          } else if (encryptedField instanceof Uint8Array) {
-            const bufferString = Buffer.from(encryptedField).toString("utf8");
-            return JSON.parse(bufferString);
-          }
-          return encryptedField;
-        };
-
-        const encryptedData = parseEncryptedData(
-          medicalRecord.recommendationsEncrypted
-        );
-        decryptedRecommendations = PIIProtectionService.decryptField(
-          encryptedData.encryptedData,
-          encryptedData.iv,
-          encryptedData.tag
-        );
-      } catch (error) {
-        logger.error("Failed to decrypt recommendations:", error);
-        decryptedRecommendations = "***DECRYPTION_ERROR***";
-      }
-    }
-
-    // Log successful access
-    await AuditService.log({
-      userId: payload.userId,
-      userEmail: payload.email,
-      action: AuditAction.DATA_ACCESSED,
-      resource: "medical_records",
-      resourceId: recordId,
-      success: true,
-      ...requestInfo,
-    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        id: medicalRecord.id,
-        patientId: medicalRecord.patientId,
-        providerId: medicalRecord.providerId,
-        type: medicalRecord.type,
-        title: medicalRecord.title,
-        recordDate: medicalRecord.recordDate,
-        description: decryptedDescription,
-        findings: decryptedFindings,
-        recommendations: decryptedRecommendations,
-        attachments: medicalRecord.attachments,
-        isPrivate: medicalRecord.isPrivate,
-        restrictedAccess: medicalRecord.restrictedAccess,
-        accessRestrictions: medicalRecord.accessRestrictions,
-        patient: medicalRecord.patient,
-        provider: medicalRecord.provider,
-        createdAt: medicalRecord.createdAt,
-        updatedAt: medicalRecord.updatedAt,
+      data: record,
+      meta: {
+        timestamp: new Date().toISOString(),
+        requestId: requestInfo.requestId,
       },
     });
   } catch (error) {
     logger.error("Get medical record error:", error);
 
-    if (
-      error instanceof Error &&
-      (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError")
-    ) {
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-          message: "Invalid or expired token",
-        },
-        { status: 401 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes("not found") || error.message.includes("Not found")) {
+        return NextResponse.json(
+          {
+            error: "Not Found",
+            message: error.message,
+          },
+          { status: 404 }
+        );
+      }
+
+      if (error.message.includes("Unauthorized")) {
+        return NextResponse.json(
+          {
+            error: "Unauthorized",
+            message: error.message,
+          },
+          { status: 401 }
+        );
+      }
+
+      if (error.message.includes("permissions") || error.message.includes("access")) {
+        return NextResponse.json(
+          {
+            error: "Forbidden",
+            message: error.message,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     return NextResponse.json(

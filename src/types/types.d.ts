@@ -31,20 +31,27 @@ interface Patient {
 
 interface MedicalReport {
   id: string;
-  patient: {
+  patient?: {
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
   };
-  doctor: {
+  provider?: {
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
   };
-  date: string;
-  subject: string;
-  status: "Reviewed" | "Submitted" | "Draft" | "Pending Review";
-  reportDetails: string;
-  attachedFiles?: AttachedFile[];
-  primaryDiagnosis?: string;
+  recordDate?: string;
+  createdAt: string;
+  title: string;
+  status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED";
+  type: string;
+  description?: string;
+  findings?: string;
+  diagnosis?: string;
+  treatmentPlan?: string;
+  recommendations?: string;
+  isPrivate: boolean;
 }
 
 interface AttachedFile {

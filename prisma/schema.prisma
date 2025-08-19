@@ -3,69 +3,70 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("POSTGRES_URL")
+  provider  = "postgresql"
+  url       = env("POSTGRES_URL")
   directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model User {
-  id                   String               @id @default(uuid())
-  email                String               @unique
-  passwordHash         String
-  firstName            String?              // Made optional - only use encrypted version
-  lastName             String?              // Made optional - only use encrypted version
-  // Encrypted PII fields (these are the primary storage)
-  firstNameEncrypted   Bytes?
-  lastNameEncrypted    Bytes?
-  emailEncrypted       Bytes?
-  phoneEncrypted       Bytes?
-  specialtyEncrypted   Bytes?
+  id                            String                 @id @default(uuid())
+  email                         String                 @unique
+  passwordHash                  String
+  firstName                     String?
+  lastName                      String?
+  role                          UserRole               @default(PATIENT)
+  phone                         String?
+  dateOfBirth                   DateTime?
+  isActive                      Boolean                @default(true)
+  emailVerified                 Boolean                @default(false)
+  mfaEnabled                    Boolean                @default(false)
+  mfaSecret                     String?
+  lastLogin                     DateTime?
+  failedLoginAttempts           Int                    @default(0)
+  lockedUntil                   DateTime?
+  passwordHistory               Json                   @default("[]")
+  createdAt                     DateTime               @default(now())
+  updatedAt                     DateTime               @updatedAt
+  createdBy                     String?
+  updatedBy                     String?
+  verificationStatus            VerificationStatus     @default(PENDING_VERIFICATION)
+  firstNameEncrypted            Bytes?
+  lastNameEncrypted             Bytes?
+  emailEncrypted                Bytes?
+  phoneEncrypted                Bytes?
+  specialtyEncrypted            Bytes?
   medicalLicenseNumberEncrypted Bytes?
-  // Original fields kept for backward compatibility during migration
-  phone                String?
-  specialty            String?              // Made optional - only use encrypted version
-  medicalLicenseNumber String?              // Made optional - only use encrypted version
-  role                 UserRole             @default(PATIENT)
-  dateOfBirth          DateTime?
-  isActive             Boolean              @default(true)
-  emailVerified        Boolean              @default(false)
-  mfaEnabled           Boolean              @default(false)
-  mfaSecret            String?
-  lastLogin            DateTime?
-  failedLoginAttempts  Int                  @default(0)
-  lockedUntil          DateTime?
-  passwordHistory      Json                 @default("[]")
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  createdBy            String?
-  updatedBy            String?
-  avatarUrl            String?              // Cloudinary URL for profile picture
-  cloudinaryPublicId   String?              // Cloudinary public ID for avatar management
-  verificationStatus   VerificationStatus   @default(PENDING_VERIFICATION)
-  appointments         Appointment[]
-  auditLogs            AuditLog[]
-  consentRecords       ConsentRecord[]
-  consultations        Consultation[]
-  medicalRecords       MedicalRecord[]
-  passwordResets       PasswordReset[]
-  assignedPatients     Patient[]            @relation("AssignedProvider")
-  patients             Patient?             @relation("UserPatients")
-  systemSettings       SystemSetting[]
-  userRoles            UserRoleAssignment[]
-  userSessions         UserSession[]
-  feedback             Feedback[]
-  systemReviews        SystemReview[]
-  verificationCodes    VerificationCode[]
+  specialty                     String?
+  medicalLicenseNumber          String?
+  avatarUrl                     String?
+  cloudinaryPublicId            String?
+  appointments                  Appointment[]
+  auditLogs                     AuditLog[]
+  consentRecords                ConsentRecord[]
+  consultations                 Consultation[]
+  feedback                      Feedback[]
+  medicalRecordAudits           MedicalRecordAudit[]   @relation("MedicalRecordAuditor")
+  medicalRecordConsents         MedicalRecordConsent[] @relation("MedicalRecordConsentProvider")
+  medicalRecords                MedicalRecord[]
+  reviewedRecords               MedicalRecord[]        @relation("RecordReviewer")
+  passwordResets                PasswordReset[]
+  assignedPatients              Patient[]              @relation("AssignedProvider")
+  patients                      Patient?               @relation("UserPatients")
+  systemReviews                 SystemReview[]
+  systemSettings                SystemSetting[]
+  userRoles                     UserRoleAssignment[]
+  userSessions                  UserSession[]
+  verificationCodes             VerificationCode[]
 
   @@map("users")
 }
 
 model Patient {
-  id                             String          @id @default(uuid())
-  userId                         String?         @unique
+  id                             String                 @id @default(uuid())
+  userId                         String?                @unique
   firstName                      String?
   lastName                       String?
-  email                          String          @unique
+  email                          String                 @unique
   dateOfBirth                    DateTime
   gender                         Gender
   phoneEncrypted                 Bytes?
@@ -78,29 +79,30 @@ model Patient {
   emergencyRelationshipEncrypted Bytes?
   emergencyPhoneEncrypted        Bytes?
   bloodType                      BloodType?
-  allergies                      Json            @default("[]")
-  chronicConditions              Json            @default("[]")
-  currentMedications             Json            @default("[]")
+  allergies                      Json                   @default("[]")
+  chronicConditions              Json                   @default("[]")
+  currentMedications             Json                   @default("[]")
   assignedProviderId             String?
-  status                         PatientStatus   @default(ACTIVE)
-  gdprConsent                    Boolean         @default(false)
+  status                         PatientStatus          @default(ACTIVE)
+  gdprConsent                    Boolean                @default(false)
   gdprConsentDate                DateTime?
   gdprConsentVersion             String?
-  createdAt                      DateTime        @default(now())
-  updatedAt                      DateTime        @updatedAt
+  createdAt                      DateTime               @default(now())
+  updatedAt                      DateTime               @updatedAt
   createdBy                      String?
   updatedBy                      String?
   appointments                   Appointment[]
   consultations                  Consultation[]
+  medicalRecordConsents          MedicalRecordConsent[]
   medicalRecords                 MedicalRecord[]
-  assignedProvider               User?           @relation("AssignedProvider", fields: [assignedProviderId], references: [id])
-  user                           User?           @relation("UserPatients", fields: [userId], references: [id])
+  assignedProvider               User?                  @relation("AssignedProvider", fields: [assignedProviderId], references: [id])
+  user                           User?                  @relation("UserPatients", fields: [userId], references: [id])
 
   @@map("patients")
 }
 
 model MedicalRecord {
-  id                       String     @id @default(uuid())
+  id                       String                 @id @default(uuid())
   patientId                String
   providerId               String
   type                     RecordType
@@ -109,16 +111,28 @@ model MedicalRecord {
   descriptionEncrypted     Bytes?
   findingsEncrypted        Bytes?
   recommendationsEncrypted Bytes?
-  attachments              Json       @default("[]")
-  isPrivate                Boolean    @default(false)
-  restrictedAccess         Boolean    @default(false)
+  attachments              Json                   @default("[]")
+  isPrivate                Boolean                @default(false)
+  restrictedAccess         Boolean                @default(false)
   accessRestrictions       Json?
-  createdAt                DateTime   @default(now())
-  updatedAt                DateTime   @updatedAt
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
   createdBy                String?
   updatedBy                String?
-  patient                  Patient    @relation(fields: [patientId], references: [id])
-  provider                 User       @relation(fields: [providerId], references: [id])
+  consentDate              DateTime?
+  consentObtained          Boolean                @default(false)
+  consentRequired          Boolean                @default(true)
+  diagnosisEncrypted       Bytes?
+  reviewedAt               DateTime?
+  reviewedBy               String?
+  status                   MedicalRecordStatus    @default(DRAFT)
+  treatmentPlanEncrypted   Bytes?
+  version                  Int                    @default(1)
+  auditTrail               MedicalRecordAudit[]
+  consentRecords           MedicalRecordConsent[]
+  patient                  Patient                @relation(fields: [patientId], references: [id])
+  provider                 User                   @relation(fields: [providerId], references: [id])
+  reviewer                 User?                  @relation("RecordReviewer", fields: [reviewedBy], references: [id])
 
   @@map("medical_records")
 }
@@ -261,14 +275,14 @@ model PasswordReset {
 }
 
 model VerificationCode {
-  id        String   @id @default(uuid())
+  id        String               @id @default(uuid())
   userId    String
   code      String
-  type      VerificationCodeType
   expiresAt DateTime
-  isUsed    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isUsed    Boolean              @default(false)
+  createdAt DateTime             @default(now())
+  type      VerificationCodeType
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("verification_codes")
 }
@@ -313,6 +327,46 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model MedicalRecordAudit {
+  id              String        @id @default(uuid())
+  medicalRecordId String
+  userId          String
+  action          String
+  fieldChanged    String?
+  oldValueHash    String?
+  newValueHash    String?
+  changeReason    String?
+  ipAddress       String?
+  userAgent       String?
+  timestamp       DateTime      @default(now())
+  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  user            User          @relation("MedicalRecordAuditor", fields: [userId], references: [id])
+
+  @@map("medical_record_audits")
+}
+
+model MedicalRecordConsent {
+  id              String        @id @default(uuid())
+  medicalRecordId String
+  patientId       String
+  providerId      String
+  consentType     String
+  granted         Boolean       @default(false)
+  grantedAt       DateTime?
+  withdrawnAt     DateTime?
+  expiresAt       DateTime?
+  consentMethod   String?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  patient         Patient       @relation(fields: [patientId], references: [id])
+  provider        User          @relation("MedicalRecordConsentProvider", fields: [providerId], references: [id])
+
+  @@map("medical_record_consents")
+}
+
 model Feedback {
   id          String           @id @default(uuid())
   userId      String
@@ -334,14 +388,12 @@ model Feedback {
 model SystemReview {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
-  title     String   // Review title
-  message   String   // Review content/feedback
-  rating    Int      // 1-5 star rating
-  
+  title     String
+  message   String
+  rating    Int
   createdAt DateTime @default(now())
-  
+  user      User     @relation(fields: [userId], references: [id])
+
   @@map("system_reviews")
 }
 
@@ -383,6 +435,14 @@ enum RecordType {
   DIAGNOSIS
   IMAGING
   PROCEDURE
+}
+
+enum MedicalRecordStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
 }
 
 enum AppointmentType {

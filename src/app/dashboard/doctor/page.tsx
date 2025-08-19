@@ -6,9 +6,12 @@ import CalendarSection from "@/components/pages/dashboard/CalendarSection";
 import FeedbackSection from "@/components/pages/dashboard/doctor/FeedbackSection";
 import RouteGuard from "@/components/common/RouteGuard";
 import { PIIDecryptionClient } from "@/services/piiDecryptionClient";
+import { useRouter } from "next/navigation";
+import { FileText, Stethoscope } from "lucide-react";
 
 const DoctorDashboard = () => {
   const { user, tokens, isAuthenticated, logout, updateUser } = useAuth();
+  const router = useRouter();
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({});
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
@@ -238,6 +241,49 @@ const DoctorDashboard = () => {
                 Logout
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Stethoscope className="h-5 w-5 text-blue-600" />
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <button
+              onClick={() => router.push('/dashboard/doctor/medical-records')}
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 text-left group"
+            >
+              <div className="p-2 bg-blue-100 group-hover:bg-blue-200 rounded-lg transition-colors">
+                <FileText className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 group-hover:text-blue-700">
+                  Medical Records
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Create and manage patient medical records
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/doctor/medical-report')}
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all duration-200 text-left group"
+            >
+              <div className="p-2 bg-green-100 group-hover:bg-green-200 rounded-lg transition-colors">
+                <FileText className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 group-hover:text-green-700">
+                  Medical Reports
+                </h4>
+                <p className="text-sm text-gray-600">
+                  View and manage existing reports
+                </p>
+              </div>
+            </button>
           </div>
         </div>
 

@@ -94,10 +94,14 @@ const ReportsTable: React.FC<ReportsTableProps> = ({
                             reports.map((report) => (
                                 <TableRow key={report.id} className="hover:bg-gray-50">
                                     <TableCell className="font-mono text-sm">{report.id}</TableCell>
-                                    <TableCell className="font-medium">{report.patient.name}</TableCell>
-                                    <TableCell>{report.doctor.name}</TableCell>
-                                    <TableCell>{formatDate(report.date)}</TableCell>
-                                    <TableCell className="max-w-xs truncate">{report.subject}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {report.patient?.firstName} {report.patient?.lastName}
+                                    </TableCell>
+                                    <TableCell>
+                                        Dr. {report.provider?.firstName} {report.provider?.lastName}
+                                    </TableCell>
+                                    <TableCell>{formatDate(report.recordDate || report.createdAt)}</TableCell>
+                                    <TableCell className="max-w-xs truncate">{report.title}</TableCell>
                                     <TableCell>
                                         <Badge variant={getStatusVariant(report.status)}>
                                             {report.status}
